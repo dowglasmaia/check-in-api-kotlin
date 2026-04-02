@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: MaiaFlight Check-in API
+  description: API responsible for MaiaFlight check-in.
+  version: 1.0.0
+
+servers:
+  - url: https://api.maiaflight.com
+    description: Production
+  - url: http://localhost:8080
+    description: Local
+
+tags:
+  - name: Check-in
+    description: Operations related to check-in
+
+paths:
+
+  /checkins/flights/search:
+    post:
+      tags:
+        - Check-in
+      summary: Search for available flights to check in.
+      operationId: searchFlights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchFlightsRequest'
+      responses:
+        '200':
+          description: List of flights found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchFlightsResponse'
+        '400':
+          description: Invalid data
+
+  /checkins:
+    post:
+      tags:
+        - Check-in
+      summary: Perform passenger check-in.
+      operationId: performCheckin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformCheckinRequest'
+      responses:
+        '201':
+          description: Check-in successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckinResponse'
+        '409':
+          description: Check-in not allowed
+        '404':
+          description: Flight or passenger not found
+
+components:
+
+  schemas:
+
+    SearchFlightsRequest:
+      type: object
+      required:
+        - searchType
+        - value
+      properties:
+        searchType:
+          type: string
+          enum:
+            - FLIGHT_NUMBER
+            - BOOKING_CODE
+            - DOCUMENT
+        value:
+          type: string
+          example: "ABC123"
+
+    SearchFlightsResponse:
+      type: object
+      properties:
+        flights:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlightSummary'
+
+    FlightSummary:
+      type: object
+      properties:
+        flightId:
+          type: string
+        flightNumber:
+          type: string
+        origin:
+          type: string
+          example: GRU
+        destination:
+          type: string
+          example: JFK
+        departureTime:
+          type: string
+          format: date-time
+        checkinAvailable:
+          type: boolean
+
+    PerformCheckinRequest:
+      type: object
+      required:
+        - flightId
+        - passengerId
+      properties:
+        flightId:
+          type: string
+        passengerId:
+          type: string
+
+    CheckinResponse:
+      type: object
+      properties:
+        checkinId:
+          type: string
+        status:
+          type: string
+          example: CONFIRMED
+        boardingGate:
+          type: string
+          example: A12
+        boardingTime:
+          type: string
+          format: date-time
