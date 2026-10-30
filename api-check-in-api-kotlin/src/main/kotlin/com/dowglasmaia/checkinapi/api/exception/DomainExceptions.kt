@@ -1,9 +1,14 @@
 package com.dowglasmaia.checkinapi.api.exception
 
-class FlightNotFoundException(message: String) : RuntimeException(message)
+/** Business failure with a stable machine-readable [code] that clients can branch on. */
+abstract class DomainException(val code: String, message: String) : RuntimeException(message)
 
-class PassengerNotFoundException(message: String) : RuntimeException(message)
+class FlightNotFoundException(message: String) : DomainException("FLIGHT_NOT_FOUND", message)
 
-class CheckinAlreadyExistsException(message: String) : RuntimeException(message)
+class PassengerNotFoundException(message: String) : DomainException("PASSENGER_NOT_FOUND", message)
 
-class CheckinNotAllowedException(message: String) : RuntimeException(message)
+class PassengerNotOnFlightException(message: String) : DomainException("PASSENGER_NOT_ON_FLIGHT", message)
+
+class CheckinAlreadyExistsException(message: String) : DomainException("CHECKIN_ALREADY_DONE", message)
+
+class CheckinNotAllowedException(message: String) : DomainException("CHECKIN_NOT_ALLOWED", message)

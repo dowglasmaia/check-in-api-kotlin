@@ -1,10 +1,7 @@
 server:
   port: 8080
-  # Virtual Threads (Project Loom) — Spring Boot 4 + Java 21+
-  # Decision: Virtual threads allow each HTTP request to be handled by a lightweight
-  # virtual thread instead of a platform thread. Under blocking I/O (DB, HTTP),
-  # virtual threads park without consuming OS threads, enabling high throughput
-  # without reactive programming complexity (no WebFlux required).
+  shutdown: graceful
+  # Virtual Threads (Project Loom): each HTTP request runs on a lightweight virtual thread.
   tomcat:
     threads:
       virtual:
@@ -13,41 +10,48 @@ server:
 spring:
   application:
     name: check-in-api
-  # Structured logging — Spring Boot 4 ships Logback with native JSON support.
-  # Outputting JSON makes logs machine-readable by Splunk, Loki, CloudWatch etc.
-  logging:
-    structured:
-      format:
-        console: ecs   # Elastic Common Schema: timestamp, log.level, message, service.name
-    level:
-      root: INFO
-      com.dowglasmaia.checkinapi: DEBUG   # Full debug visibility on domain logic in dev
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+# Structured logging: Spring Boot ships native JSON formats. `logging.structured.*` is a
+# top-level property (it was previously nested under `spring:` and silently ignored).
+# ECS includes MDC entries, so the `requestId` set by RequestIdFilter is emitted on every line.
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}   # set LOG_FORMAT= (empty) for plain text in local dev
+  level:
+    root: INFO
+    com.dowglasmaia.checkinapi: ${LOG_LEVEL:INFO}
 
 management:
   endpoints:
     web:
+      # Only what is needed to operate the service. `env`, `loggers` and `mappings` were
+      # removed: they leak configuration and `loggers` allows changing log levels at runtime.
       exposure:
-        include: health, info, metrics, loggers, env, mappings
+        include: health, info, metrics
       base-path: /actuator
   endpoint:
     health:
-      show-details: always
-      show-components: always
-    info:
-      enabled: true
+      show-details: when-authorized
+      probes:
+        enabled: true
   info:
-    env:
-      enabled: true
     java:
       enabled: true
-    build:
-      enabled: true
-    git:
-      enabled: true
-  # Prometheus-compatible metrics exposition (scrape at /actuator/prometheus if micrometer-registry-prometheus is added)
   metrics:
     tags:
       application: ${spring.application.name}
+
+app:
+  demo:
+    # Serves GET /demo/test-data (fictitious scenarios). Set APP_DEMO_ENABLED=false to remove it.
+    enabled: ${APP_DEMO_ENABLED:true}
+  cors:
+    # Comma-separated list of allowed browser origins (e.g. http://localhost:4200).
+    # Empty (default) = CORS disabled.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
 info:
   app:

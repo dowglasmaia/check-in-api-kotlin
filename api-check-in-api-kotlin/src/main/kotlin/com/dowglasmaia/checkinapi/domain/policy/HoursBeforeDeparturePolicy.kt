@@ -2,37 +2,24 @@ package com.dowglasmaia.checkinapi.domain.policy
 
 import com.dowglasmaia.checkinapi.domain.model.Flight
 import com.dowglasmaia.checkinapi.domain.model.FlightStatus
-import org.slf4j.LoggerFactory
+import java.time.Clock
+import java.time.Duration
 import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 
+/** Check-in is open from [maxHoursBeforeDeparture] hours before departure until departure. */
 class HoursBeforeDeparturePolicy(
-    private val maxHoursBeforeDeparture: Long = 72
+    private val maxHoursBeforeDeparture: Long = 72,
+    private val clock: Clock = Clock.systemUTC()
 ) : CheckinPolicy {
 
-    private val logger = LoggerFactory.getLogger(HoursBeforeDeparturePolicy::class.java)
-
     override fun canCheckin(flight: Flight): Boolean {
-        if (flight.status in setOf(FlightStatus.CANCELLED, FlightStatus.BOARDED, FlightStatus.CLOSED)) {
-            logger.debug(
-                "action=policy_rejected_status flightId={} status={}",
-                flight.id,
-                flight.status
-            )
-            return false
-        }
-        val now = LocalDateTime.now()
-        val hoursUntilDeparture = ChronoUnit.HOURS.between(now, flight.departureTime)
-        val eligible = hoursUntilDeparture in 0..maxHoursBeforeDeparture
+        if (flight.status != FlightStatus.SCHEDULED) return false
 
-        logger.debug(
-            "action=policy_window_check flightId={} hoursUntilDeparture={} maxHours={} eligible={}",
-            flight.id,
-            hoursUntilDeparture,
-            maxHoursBeforeDeparture,
-            eligible
-        )
-
-        return eligible
+        // Exact comparison: truncating to whole hours would accept a flight that departed 30 minutes ago.
+        val untilDeparture = Duration.between(LocalDateTime.now(clock), flight.departureTime)
+        return !untilDeparture.isNegative && untilDeparture <= Duration.ofHours(maxHoursBeforeDeparture)
     }
+
+    override fun checkinOpensAt(flight: Flight): LocalDateTime =
+        flight.departureTime.minusHours(maxHoursBeforeDeparture)
 }

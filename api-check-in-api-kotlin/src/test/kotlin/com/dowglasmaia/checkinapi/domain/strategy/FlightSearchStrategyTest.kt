@@ -11,6 +11,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 class FlightSearchStrategyTest : FunSpec({
 
@@ -23,7 +24,7 @@ class FlightSearchStrategyTest : FunSpec({
         bookingCode = "ABC123",
         origin = "GRU",
         destination = "JFK",
-        departureTime = LocalDateTime.now().plusHours(24),
+        departureTime = LocalDateTime.now(ZoneOffset.UTC).plusHours(24),
         status = FlightStatus.SCHEDULED,
         passengerIds = listOf("P-001")
     )
@@ -36,8 +37,8 @@ class FlightSearchStrategyTest : FunSpec({
 
             val result = strategy.search("MF100")
 
-            result shouldHaveSize 1
-            result[0].flightNumber shouldBe "MF100"
+            result.flights shouldHaveSize 1
+            result.flights[0].flightNumber shouldBe "MF100"
             verify(exactly = 1) { flightRepository.findByFlightNumber("MF100") }
         }
 
@@ -46,7 +47,7 @@ class FlightSearchStrategyTest : FunSpec({
 
             val result = strategy.search("UNKNOWN")
 
-            result.shouldBeEmpty()
+            result.flights.shouldBeEmpty()
         }
     }
 
@@ -58,8 +59,8 @@ class FlightSearchStrategyTest : FunSpec({
 
             val result = strategy.search("ABC123")
 
-            result shouldHaveSize 1
-            result[0].bookingCode shouldBe "ABC123"
+            result.flights shouldHaveSize 1
+            result.flights[0].bookingCode shouldBe "ABC123"
             verify(exactly = 1) { flightRepository.findByBookingCode("ABC123") }
         }
 
@@ -68,7 +69,7 @@ class FlightSearchStrategyTest : FunSpec({
 
             val result = strategy.search("NOTFOUND")
 
-            result.shouldBeEmpty()
+            result.flights.shouldBeEmpty()
         }
     }
 
@@ -88,11 +89,21 @@ class FlightSearchStrategyTest : FunSpec({
 
             val result = strategy.search("123.456.789-00")
 
-            result shouldHaveSize 1
-            result[0].id shouldBe "FL-001"
+            result.flights shouldHaveSize 1
+            result.flights[0].id shouldBe "FL-001"
+            result.passengerId shouldBe "P-001"
             verify(exactly = 1) { passengerRepository.findByDocument("123.456.789-00") }
             verify(exactly = 1) { flightRepository.findByPassengerId("P-001") }
         }
 
+
+        test("returns no flights and no passenger when the document is unknown") {
+            every { passengerRepository.findByDocument("000") } returns null
+
+            val result = strategy.search("000")
+
+            result.flights.shouldBeEmpty()
+            result.passengerId shouldBe null
+        }
     }
 })
