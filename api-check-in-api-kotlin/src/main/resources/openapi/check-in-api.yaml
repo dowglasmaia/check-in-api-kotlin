@@ -1,0 +1,318 @@
+openapi: 3.0.3
+info:
+  title: MaiaFlight Check-in API
+  description: API responsible for MaiaFlight check-in.
+  version: 1.1.0
+
+servers:
+  - url: https://api.maiaflight.com
+    description: Production
+  - url: http://localhost:8080
+    description: Local
+
+tags:
+  - name: Check-in
+    description: Operations related to check-in
+  - name: Demo
+    description: Fictitious data for testing the flow (can be disabled)
+
+paths:
+
+  /checkins/flights/search:
+    post:
+      tags:
+        - Check-in
+      summary: Search flights by flight number, booking code or document.
+      description: >
+        Returns the matching flights that have not departed yet. Each flight carries
+        `checkinAvailable`, so flights whose check-in is not open (or that were cancelled) are listed too.
+        `passengerId` is returned only when the search identifies a passenger (DOCUMENT).
+      operationId: searchFlights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchFlightsRequest'
+      responses:
+        '200':
+          description: List of flights found (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchFlightsResponse'
+        '400':
+          description: Invalid data (missing/blank fields, unknown searchType, malformed JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /checkins:
+    post:
+      tags:
+        - Check-in
+      summary: Perform passenger check-in.
+      operationId: performCheckin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformCheckinRequest'
+      responses:
+        '201':
+          description: Check-in successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckinResponse'
+        '400':
+          description: Invalid data (missing/blank fields, malformed JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >
+            Check-in not allowed. `code` is CHECKIN_NOT_ALLOWED (outside the window or flight not scheduled)
+            or CHECKIN_ALREADY_DONE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >
+            `code` is FLIGHT_NOT_FOUND, PASSENGER_NOT_FOUND or PASSENGER_NOT_ON_FLIGHT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /demo/test-data:
+    get:
+      tags:
+        - Demo
+      summary: Fictitious scenarios for testing the flow.
+      description: Answers 404 when the service runs with `app.demo.enabled=false`.
+      operationId: getTestData
+      responses:
+        '200':
+          description: Scenarios generated from the seed data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestDataResponse'
+        '404':
+          description: Demo data disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /demo/reset:
+    post:
+      tags:
+        - Demo
+      summary: Forget every check-in so the demo flow can be repeated.
+      description: Answers 404 when the service runs with `app.demo.enabled=false`.
+      operationId: resetDemoData
+      responses:
+        '204':
+          description: All check-ins were removed
+        '404':
+          description: Demo data disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+
+  schemas:
+
+    SearchType:
+      type: string
+      enum:
+        - FLIGHT_NUMBER
+        - BOOKING_CODE
+        - DOCUMENT
+
+    FlightStatus:
+      type: string
+      enum:
+        - SCHEDULED
+        - CANCELLED
+        - BOARDED
+        - CLOSED
+
+    SearchFlightsRequest:
+      type: object
+      required:
+        - searchType
+        - value
+      properties:
+        searchType:
+          $ref: '#/components/schemas/SearchType'
+        value:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: "ABC123"
+
+    SearchFlightsResponse:
+      type: object
+      properties:
+        flights:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlightSummary'
+        passengerId:
+          type: string
+          description: Present only when the search identifies a passenger (DOCUMENT).
+          example: P-004
+
+    FlightSummary:
+      type: object
+      properties:
+        flightId:
+          type: string
+        flightNumber:
+          type: string
+        origin:
+          type: string
+          example: GRU
+        destination:
+          type: string
+          example: JFK
+        departureTime:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/FlightStatus'
+        checkinAvailable:
+          type: boolean
+        checkinOpensAt:
+          type: string
+          format: date-time
+          description: Moment when check-in opens for this flight.
+
+    PerformCheckinRequest:
+      type: object
+      required:
+        - flightId
+        - passengerId
+      properties:
+        flightId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: FL-001
+        passengerId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: P-001
+
+    CheckinResponse:
+      type: object
+      properties:
+        checkinId:
+          type: string
+        status:
+          type: string
+          example: CONFIRMED
+        boardingGate:
+          type: string
+          example: A1
+        boardingTime:
+          type: string
+          format: date-time
+
+    TestDataResponse:
+      type: object
+      properties:
+        notice:
+          type: string
+          example: Fictitious data for flow testing only
+        scenarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestScenario'
+        flights:
+          type: array
+          description: Fictitious passengers of each flight, so a check-in can be completed without knowing the seed.
+          items:
+            $ref: '#/components/schemas/TestFlight'
+
+    TestFlight:
+      type: object
+      properties:
+        flightId:
+          type: string
+          example: FL-004
+        passengers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestPassenger'
+
+    TestPassenger:
+      type: object
+      properties:
+        passengerId:
+          type: string
+          example: P-004
+        name:
+          type: string
+          example: Ana Costa
+
+    TestScenario:
+      type: object
+      properties:
+        label:
+          type: string
+        searchType:
+          $ref: '#/components/schemas/SearchType'
+        value:
+          type: string
+        expectedOutcome:
+          type: string
+        note:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+        - message
+        - code
+      properties:
+        status:
+          type: integer
+          example: 404
+        error:
+          type: string
+          example: Not Found
+        message:
+          type: string
+          example: "Flight not found: FL-999"
+        code:
+          type: string
+          description: >
+            Stable error code. Domain: FLIGHT_NOT_FOUND, PASSENGER_NOT_FOUND, PASSENGER_NOT_ON_FLIGHT,
+            CHECKIN_NOT_ALLOWED, CHECKIN_ALREADY_DONE. Generic: VALIDATION_ERROR, MALFORMED_REQUEST,
+            INTERNAL_ERROR, or the HTTP status name (e.g. METHOD_NOT_ALLOWED).
+          example: FLIGHT_NOT_FOUND

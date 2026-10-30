@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-822c5cf5-e839-4629-94c8-741135d7822c/styles.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)}
+a{color:var(--color-accent-300)}a:hover{color:var(--color-accent-100)}
+@keyframes mf-dash{to{stroke-dashoffset:-40}}
+@keyframes mf-spin{to{transform:rotate(360deg)}}
+@keyframes mf-shim{0%{opacity:.35}50%{opacity:.7}100%{opacity:.35}}
+@keyframes mf-pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes mf-draw{to{stroke-dashoffset:0}}
+@keyframes mf-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes mf-fly{0%{offset-distance:0%}100%{offset-distance:100%}}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height:100vh;background:radial-gradient(1100px 520px at 12% -8%,var(--color-accent-900),transparent 70%),var(--color-bg);display:flex;flex-direction:column;align-items:center">
+
+<!-- prototype bar -->
+<div style="width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:10px 20px;background:color-mix(in srgb,var(--color-text) 5%,transparent);font-size:12px;color:var(--color-neutral-400)">
+  <span style="display:flex;gap:8px;align-items:center"><i class="ph ph-flask"></i>Prototype · mock data</span>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <label style="display:flex;gap:6px;align-items:center">Jump to state
+      <select class="input" value="{{ jumpVal }}" onChange="{{ onJump }}" style="padding:4px 8px;font-size:12px;width:auto">
+        <option value="">—</option><option value="loading">Loading</option><option value="invalid">Invalid code</option><option value="none">No flights found</option><option value="notfound">Flight not found</option><option value="window">Outside 72h window</option><option value="cancelled">Flight cancelled</option><option value="already">Already checked in</option><option value="api">API failure</option>
+      </select>
+    </label>
+    <button class="btn btn-ghost" onClick="{{ toggleView }}" style="padding:4px 10px;font-size:12px"><i class="{{ viewIcon }}"></i>{{ viewLabel }}</button>
+  </div>
+</div>
+
+<div style="width:100%;max-width:{{ frameW }};box-sizing:border-box;margin:{{ frameMargin }};border:{{ frameBorder }};border-radius:{{ frameRadius }};overflow:hidden;background:var(--color-bg);position:relative">
+
+<!-- nav -->
+<div class="nav" style="display:flex;align-items:center;justify-content:space-between;padding:16px {{ pad }};gap:12px">
+  <a href="#" onClick="{{ goHome }}" style="display:flex;align-items:center;gap:10px;color:var(--color-text);text-decoration:none">
+    <span style="width:32px;height:32px;border-radius:50%;border:1px solid var(--color-accent);display:grid;place-items:center;color:var(--color-accent);box-shadow:0 0 18px color-mix(in srgb,var(--color-accent) 35%,transparent)"><i class="ph-fill ph-airplane-tilt" style="font-size:16px"></i></span>
+    <span style="font-size:18px;font-weight:500;letter-spacing:-.01em">Maia<span style="color:var(--color-accent-300)">Flight</span></span>
+  </a>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="tag tag-outline"><i class="ph ph-airplane-takeoff"></i>Online check-in</span>
+    <sc-if value="{{ showHelp }}" hint-placeholder-val="{{ true }}"><button class="btn btn-ghost btn-icon" aria-label="Help"><i class="ph ph-question"></i></button></sc-if>
+  </div>
+</div>
+
+<!-- stepper -->
+<sc-if value="{{ showSteps }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 {{ pad }};display:flex;gap:{{ stepGap }};align-items:center;font-size:12px;color:var(--color-neutral-500)">
+  <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+    <div style="display:flex;align-items:center;gap:8px;flex:{{ s.flex }};min-width:0">
+      <span style="width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:11px;border:1px solid {{ s.bc }};background:{{ s.bg }};color:{{ s.fg }}">{{ s.n }}</span>
+      <sc-if value="{{ s.showLabel }}" hint-placeholder-val="{{ true }}"><span style="color:{{ s.tc }};white-space:nowrap">{{ s.label }}</span></sc-if>
+      <span style="flex:1;height:1px;min-width:8px;background:linear-gradient(90deg,{{ s.line }},transparent);display:{{ s.lineDisp }}"></span>
+    </div>
+  </sc-for>
+</div>
+</sc-if>
+
+<main style="padding:{{ mainPad }}">
+
+<!-- HOME -->
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:{{ homeCols }};gap:{{ homeGap }};align-items:center;animation:mf-rise .5s both">
+  <div>
+    <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-300);display:flex;gap:10px;align-items:center"><span style="width:28px;height:1px;background:var(--color-accent)"></span>Digital check-in</div>
+    <h1 style="font-family:var(--font-heading);font-weight:500;font-size:{{ h1Size }};line-height:1.02;letter-spacing:-.03em;margin:16px 0 16px">Your journey<br>starts here.</h1>
+    <p style="font-size:16px;line-height:1.55;color:var(--color-neutral-300);max-width:46ch;margin:0 0 28px;text-wrap:pretty">Check in online in under a minute. Tell us how to find your reservation, pick your flight and get your boarding gate and time — no queues, no paper.</p>
+
+    <div class="card elev-md" style="padding:{{ cardPad }};max-width:560px;display:flex;flex-direction:column;gap:16px;box-sizing:border-box">
+      <div role="tablist" aria-label="Search by" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:var(--radius-md);background:var(--color-bg);border:1px solid var(--color-divider)">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+          <button role="tab" aria-selected="{{ t.on }}" onClick="{{ t.pick }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 4px;font-size:12px;cursor:pointer;border-radius:6px;border:1px solid {{ t.bc }};background:{{ t.bg }};color:{{ t.fg }};transition:all .2s"><i class="{{ t.icon }}" style="font-size:18px"></i>{{ t.label }}</button>
+        </sc-for>
+      </div>
+      <form onSubmit="{{ submit }}" style="display:flex;flex-direction:column;gap:14px" novalidate>
+        <div class="field" style="display:flex;flex-direction:column;gap:6px">
+          <label for="mf-val" style="font-size:13px;color:var(--color-neutral-300)">{{ fieldLabel }}</label>
+          <div style="position:relative">
+            <i class="{{ fieldIcon }}" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--color-neutral-500);font-size:18px"></i>
+            <input id="mf-val" class="input" value="{{ value }}" onInput="{{ onValue }}" placeholder="{{ placeholder }}" autocomplete="off" aria-invalid="{{ hasInlineErr }}" style="padding-left:40px;height:46px;width:100%;box-sizing:border-box;font-size:16px;letter-spacing:{{ tracking }}">
+          </div>
+          <div style="font-size:12px;min-height:16px;color:{{ hintColor }};display:flex;gap:6px;align-items:center"><i class="{{ hintIcon }}"></i>{{ hint }}</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="height:46px;font-size:15px;display:flex;gap:8px;align-items:center;justify-content:center">Find my flight<i class="ph ph-arrow-right"></i></button>
+      </form>
+      <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--color-neutral-300);line-height:1.4"><i class="ph ph-clock-countdown" style="font-size:18px;color:var(--color-accent-300);flex:none"></i><span>Check-in is available up to <strong style="font-weight:500;color:var(--color-text)">72 hours before departure</strong>.</span></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;font-size:12px;color:var(--color-neutral-500)">Try:
+      <sc-for list="{{ demos }}" as="d" hint-placeholder-count="3"><button class="tag tag-neutral" onClick="{{ d.fill }}" style="cursor:pointer;border:0">{{ d.label }}</button></sc-for>
+    </div>
+  </div>
+
+  <!-- route visual -->
+  <sc-if value="{{ showHeroArt }}" hint-placeholder-val="{{ true }}">
+  <div style="position:relative;aspect-ratio:1/1.02;border-radius:var(--radius-lg);border:1px solid var(--color-divider);background:radial-gradient(70% 60% at 70% 20%,color-mix(in srgb,var(--color-accent) 22%,transparent),transparent 70%),linear-gradient(160deg,var(--color-surface),var(--color-bg));overflow:hidden">
+    <svg viewBox="0 0 400 410" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">
+      <g stroke="var(--color-neutral-800)" stroke-width="1" fill="none" opacity=".7"><circle cx="200" cy="205" r="70"/><circle cx="200" cy="205" r="130"/><circle cx="200" cy="205" r="190"/></g>
+      <path d="M70 320 C 120 120, 280 60, 336 110" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-dasharray="3 7" style="animation:mf-dash 2.4s linear infinite"/>
+      <path d="M70 320 C 150 340, 250 300, 300 250" fill="none" stroke="var(--color-neutral-600)" stroke-width="1" stroke-dasharray="2 6" opacity=".6"/>
+      <circle cx="70" cy="320" r="5" fill="var(--color-accent)"/><circle cx="70" cy="320" r="12" fill="none" stroke="var(--color-accent)" opacity=".4"/>
+      <circle cx="336" cy="110" r="5" fill="var(--color-accent-300)"/><circle cx="300" cy="250" r="3.5" fill="var(--color-neutral-400)"/>
+    </svg>
+    <i class="ph-fill ph-airplane-tilt" style="position:absolute;left:46%;top:20%;font-size:34px;color:var(--color-accent-200);transform:rotate(18deg);filter:drop-shadow(0 0 14px var(--color-accent))"></i>
+    <div style="position:absolute;left:6%;bottom:8%;font-size:12px;color:var(--color-neutral-300)"><div style="font-size:30px;font-weight:500;letter-spacing:-.02em;color:var(--color-text)">GRU</div>São Paulo</div>
+    <div style="position:absolute;right:8%;top:8%;text-align:right;font-size:12px;color:var(--color-neutral-300)"><div style="font-size:30px;font-weight:500;letter-spacing:-.02em;color:var(--color-text)">LIS</div>Lisbon</div>
+    <div style="position:absolute;right:8%;bottom:8%;text-align:right;font-size:12px;color:var(--color-neutral-400)"><div style="font-size:18px;font-weight:500;color:var(--color-neutral-200)">SSA</div>Salvador</div>
+    <div style="position:absolute;left:6%;top:8%;display:flex;gap:6px;flex-wrap:wrap"><span class="tag tag-accent"><i class="ph ph-shield-check"></i>Secure</span><span class="tag tag-neutral">9h 40m</span></div>
+  </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<!-- LOADING -->
+<sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:760px;display:flex;flex-direction:column;gap:14px" role="status" aria-live="polite">
+  <div style="display:flex;gap:12px;align-items:center;font-size:15px;color:var(--color-neutral-200)"><span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--color-accent-800);border-top-color:var(--color-accent);animation:mf-spin .8s linear infinite"></span>{{ loadingMsg }}</div>
+  <sc-for list="{{ skeletons }}" as="k" hint-placeholder-count="2">
+    <div class="card" style="padding:20px;display:flex;flex-direction:column;gap:14px;animation:mf-shim 1.4s ease-in-out infinite;animation-delay:{{ k.delay }}">
+      <div style="display:flex;justify-content:space-between"><span style="width:90px;height:14px;border-radius:4px;background:var(--color-neutral-800)"></span><span style="width:110px;height:22px;border-radius:11px;background:var(--color-neutral-800)"></span></div>
+      <div style="display:flex;gap:16px;align-items:center"><span style="width:70px;height:34px;border-radius:6px;background:var(--color-neutral-800)"></span><span style="flex:1;height:2px;background:var(--color-neutral-800)"></span><span style="width:70px;height:34px;border-radius:6px;background:var(--color-neutral-800)"></span></div>
+    </div>
+  </sc-for>
+</div>
+</sc-if>
+
+<!-- RESULTS -->
+<sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:820px;animation:mf-rise .4s both">
+  <button class="btn btn-ghost" onClick="{{ goHome }}" style="padding:4px 8px;margin-left:-8px;font-size:13px"><i class="ph ph-arrow-left"></i>New search</button>
+  <h2 style="font-family:var(--font-heading);font-weight:500;font-size:{{ h2Size }};letter-spacing:-.02em;margin:10px 0 6px">{{ resultsTitle }}</h2>
+  <p style="margin:0 0 22px;font-size:14px;color:var(--color-neutral-400)">{{ typeLabel }} · <span style="color:var(--color-neutral-200)">{{ value }}</span> — choose the flight you want to check in for.</p>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ cards }}" as="c" hint-placeholder-count="3">
+      <article class="card elev-sm" style="padding:0;overflow:hidden;border:1px solid {{ c.border }};opacity:{{ c.opacity }};transition:transform .2s,border-color .2s" style-hover="transform:translateY(-2px)">
+        <div style="padding:{{ cardPad }};display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--color-neutral-300)"><i class="ph ph-airplane" style="color:var(--color-accent-300)"></i><strong style="font-weight:500;color:var(--color-text);letter-spacing:.04em">{{ c.number }}</strong><span style="color:var(--color-neutral-500)">·</span>{{ c.date }}</div>
+            <span style="display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:3px 10px;border-radius:99px;color:{{ c.tone }};background:color-mix(in srgb,{{ c.tone }} 14%,transparent);border:1px solid color-mix(in srgb,{{ c.tone }} 40%,transparent)"><i class="{{ c.tagIcon }}"></i>{{ c.tagLabel }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:{{ routeGap }};align-items:center">
+            <div><div style="font-size:{{ codeSize }};font-weight:500;letter-spacing:-.02em;line-height:1">{{ c.o }}</div><div style="font-size:12px;color:var(--color-neutral-400);margin-top:4px">{{ c.oCity }}</div></div>
+            <div style="display:flex;align-items:center;gap:8px;color:var(--color-neutral-500);min-width:30px"><span style="flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--color-neutral-600))"></span><i class="ph-fill ph-airplane-tilt" style="color:{{ c.tone }};transform:rotate(90deg)"></i><span style="flex:1;height:1px;background:linear-gradient(270deg,transparent,var(--color-neutral-600))"></span></div>
+            <div style="text-align:right"><div style="font-size:{{ codeSize }};font-weight:500;letter-spacing:-.02em;line-height:1">{{ c.d }}</div><div style="font-size:12px;color:var(--color-neutral-400);margin-top:4px">{{ c.dCity }}</div></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px {{ cardPad }};border-top:1px dashed var(--color-divider);background:color-mix(in srgb,var(--color-bg) 50%,transparent)">
+          <div style="font-size:13px;color:var(--color-neutral-300);display:flex;gap:8px;align-items:center"><i class="ph ph-clock"></i>Departs <strong style="font-weight:500;color:var(--color-text)">{{ c.time }}</strong><span style="color:var(--color-neutral-500)">· {{ c.note }}</span></div>
+          <button class="btn {{ c.btnClass }}" onClick="{{ c.select }}" style="display:flex;gap:8px;align-items:center">{{ c.btnLabel }}<i class="ph ph-arrow-right"></i></button>
+        </div>
+      </article>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<!-- DETAILS -->
+<sc-if value="{{ isDetails }}" hint-placeholder-val="{{ false }}">
+<div style="animation:mf-rise .4s both">
+  <button class="btn btn-ghost" onClick="{{ backToResults }}" style="padding:4px 8px;margin-left:-8px;font-size:13px"><i class="ph ph-arrow-left"></i>Back to flights</button>
+  <div style="display:grid;grid-template-columns:{{ detCols }};gap:24px;margin-top:10px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
+      <div class="card elev-md" style="padding:{{ cardPad }};background:radial-gradient(80% 120% at 100% 0%,color-mix(in srgb,var(--color-accent) 16%,transparent),transparent 60%),var(--color-surface);display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><span class="tag tag-accent"><i class="ph ph-airplane"></i>{{ sel.number }}</span><span style="font-size:13px;color:var(--color-neutral-300)">{{ sel.date }}</span></div>
+        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:{{ routeGap }};align-items:center">
+          <div><div style="font-size:{{ bigCode }};font-weight:500;letter-spacing:-.03em;line-height:1">{{ sel.o }}</div><div style="font-size:13px;color:var(--color-neutral-300);margin-top:6px">{{ sel.oCity }}</div></div>
+          <div style="position:relative;height:30px"><svg viewBox="0 0 200 30" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%"><path d="M0 26 Q100 -14 200 26" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-dasharray="3 6" vector-effect="non-scaling-stroke" style="animation:mf-dash 2s linear infinite"/></svg><i class="ph-fill ph-airplane-tilt" style="position:absolute;left:50%;top:-2px;transform:translateX(-50%) rotate(90deg);color:var(--color-accent-200);font-size:20px"></i></div>
+          <div style="text-align:right"><div style="font-size:{{ bigCode }};font-weight:500;letter-spacing:-.03em;line-height:1">{{ sel.d }}</div><div style="font-size:13px;color:var(--color-neutral-300);margin-top:6px">{{ sel.dCity }}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ infoCols }};gap:1px;background:var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+          <sc-for list="{{ info }}" as="i" hint-placeholder-count="6">
+            <div style="background:var(--color-surface);padding:12px 14px"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-500);display:flex;gap:6px;align-items:center"><i class="{{ i.icon }}"></i>{{ i.label }}</div><div style="font-size:16px;margin-top:4px;color:{{ i.color }}">{{ i.value }}</div></div>
+          </sc-for>
+        </div>
+      </div>
+      <div class="card" style="padding:{{ cardPad }}">
+        <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-400);margin-bottom:16px">Your journey</div>
+        <div style="display:flex;flex-direction:column">
+          <sc-for list="{{ timeline }}" as="t" hint-placeholder-count="4">
+            <div style="display:flex;gap:14px">
+              <div style="display:flex;flex-direction:column;align-items:center">
+                <span style="width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:14px;border:1px solid {{ t.bc }};background:{{ t.bg }};color:{{ t.fg }}"><i class="{{ t.icon }}"></i></span>
+                <span style="flex:1;width:1px;min-height:18px;background:{{ t.line }};display:{{ t.lineDisp }}"></span>
+              </div>
+              <div style="padding-bottom:{{ t.pb }};min-width:0"><div style="font-size:15px;color:{{ t.tc }}">{{ t.title }}</div><div style="font-size:13px;color:var(--color-neutral-400);margin-top:2px">{{ t.sub }}</div></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <aside class="card elev-md" style="padding:{{ cardPad }};display:flex;flex-direction:column;gap:16px;position:{{ asidePos }};top:16px">
+      <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-400)">Trip summary</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+        <sc-for list="{{ summary }}" as="r" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--color-neutral-400)">{{ r.k }}</span><span style="text-align:right">{{ r.v }}</span></div></sc-for>
+      </div>
+      <div style="display:flex;gap:10px;font-size:12px;line-height:1.45;color:var(--color-neutral-400);padding:10px 12px;border-radius:var(--radius-md);background:color-mix(in srgb,var(--color-accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--color-accent) 22%,transparent)"><i class="ph ph-identification-card" style="font-size:18px;color:var(--color-accent-300);flex:none"></i><span>{{ passengerNote }}</span></div>
+      <button class="btn btn-primary btn-block" onClick="{{ confirmCheckin }}" disabled="{{ submitting }}" style="height:46px;font-size:15px;display:flex;gap:10px;align-items:center;justify-content:center">
+        <sc-if value="{{ submitting }}" hint-placeholder-val="{{ false }}"><span style="width:16px;height:16px;border-radius:50%;border:2px solid var(--color-accent-800);border-top-color:var(--color-accent);animation:mf-spin .8s linear infinite"></span></sc-if>{{ confirmLabel }}
+      </button>
+      <div style="font-size:12px;color:var(--color-neutral-500);text-align:center">Boarding gate and time are issued once check-in is confirmed.</div>
+    </aside>
+  </div>
+</div>
+</sc-if>
+
+<!-- SUCCESS -->
+<sc-if value="{{ isSuccess }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:{{ okCols }};gap:{{ homeGap }};align-items:center">
+  <div>
+    <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true" style="animation:mf-pop .6s both;overflow:visible;filter:drop-shadow(0 0 22px color-mix(in srgb,var(--color-accent) 55%,transparent))">
+      <circle cx="48" cy="48" r="44" fill="color-mix(in srgb,var(--color-accent) 10%,transparent)" stroke="var(--color-accent)" stroke-width="1.5"/>
+      <path d="M30 49 L43 62 L67 36" fill="none" stroke="var(--color-accent-200)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="60" stroke-dashoffset="60" style="animation:mf-draw .6s .4s ease-out forwards"/>
+    </svg>
+    <h2 role="status" style="font-family:var(--font-heading);font-weight:500;font-size:{{ h1Size }};line-height:1.05;letter-spacing:-.03em;margin:22px 0 12px;animation:mf-rise .5s .3s both">Check-in successfully completed!</h2>
+    <p style="font-size:16px;line-height:1.55;color:var(--color-neutral-300);max-width:44ch;margin:0 0 24px;animation:mf-rise .5s .45s both">You're all set for {{ sel.number }}. Head to gate <strong style="font-weight:500;color:var(--color-text)">{{ ci.gate }}</strong> before boarding at <strong style="font-weight:500;color:var(--color-text)">{{ ci.boardTime }}</strong>.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;animation:mf-rise .5s .55s both"><button class="btn btn-primary" onClick="{{ goHome }}"><i class="ph ph-plus"></i>Check in another flight</button><button class="btn btn-ghost" onClick="{{ backToResults }}">Back to my flights</button></div>
+  </div>
+
+  <div style="animation:mf-rise .6s .4s both;max-width:440px;width:100%;justify-self:{{ passAlign }}">
+    <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:10px">Boarding pass · preview</div>
+    <div class="elev-lg" style="border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--color-divider);background:linear-gradient(165deg,var(--color-accent-800),var(--color-surface) 55%)">
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:500"><i class="ph-fill ph-airplane-tilt" style="color:var(--color-accent-200)"></i>MaiaFlight</span><span style="display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:3px 10px;border-radius:99px;color:oklch(0.85 0.13 160);border:1px solid oklch(0.85 0.13 160 / .5);background:oklch(0.85 0.13 160 / .12);letter-spacing:.08em"><i class="ph-fill ph-check-circle"></i>{{ ci.status }}</span></div>
+        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center">
+          <div><div style="font-size:40px;font-weight:500;letter-spacing:-.03em;line-height:1">{{ sel.o }}</div><div style="font-size:12px;color:var(--color-neutral-300);margin-top:4px">{{ sel.oCity }}</div></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="flex:1;height:1px;background:var(--color-neutral-500)"></span><i class="ph-fill ph-airplane-tilt" style="transform:rotate(90deg);color:var(--color-accent-200)"></i><span style="flex:1;height:1px;background:var(--color-neutral-500)"></span></div>
+          <div style="text-align:right"><div style="font-size:40px;font-weight:500;letter-spacing:-.03em;line-height:1">{{ sel.d }}</div><div style="font-size:12px;color:var(--color-neutral-300);margin-top:4px">{{ sel.dCity }}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+          <sc-for list="{{ passFields }}" as="f" hint-placeholder-count="6"><div><div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-400)">{{ f.k }}</div><div style="font-size:{{ f.size }};font-weight:500;margin-top:3px">{{ f.v }}</div></div></sc-for>
+        </div>
+      </div>
+      <div style="position:relative;height:20px"><span style="position:absolute;left:-10px;top:0;width:20px;height:20px;border-radius:50%;background:var(--color-bg)"></span><span style="position:absolute;right:-10px;top:0;width:20px;height:20px;border-radius:50%;background:var(--color-bg)"></span><span style="position:absolute;left:14px;right:14px;top:10px;border-top:1px dashed var(--color-neutral-600)"></span></div>
+      <div style="padding:14px 20px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div><div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-400)">Confirmation code</div><div style="font-size:24px;font-weight:500;letter-spacing:.12em;margin-top:3px;font-variant-numeric:tabular-nums">{{ ci.id }}</div></div>
+        <button class="btn btn-ghost btn-icon" onClick="{{ copyCode }}" aria-label="Copy confirmation code"><i class="{{ copyIcon }}"></i></button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;font-size:12px;color:var(--color-neutral-500);margin-top:12px;line-height:1.45"><i class="ph ph-info" style="flex:none;margin-top:1px"></i>Visual preview only. Download and QR code aren't available yet.</div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ERROR -->
+<sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:620px;animation:mf-rise .4s both" role="alert">
+  <div style="width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:30px;color:{{ err.tone }};border:1px solid color-mix(in srgb,{{ err.tone }} 50%,transparent);background:color-mix(in srgb,{{ err.tone }} 12%,transparent)"><i class="{{ err.icon }}"></i></div>
+  <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:{{ err.tone }};margin:20px 0 8px">{{ err.kicker }}</div>
+  <h2 style="font-family:var(--font-heading);font-weight:500;font-size:{{ h2Size }};letter-spacing:-.02em;line-height:1.1;margin:0 0 12px">{{ err.title }}</h2>
+  <p style="font-size:16px;line-height:1.55;color:var(--color-neutral-300);margin:0 0 20px;text-wrap:pretty">{{ err.body }}</p>
+  <ul style="list-style:none;padding:0;margin:0 0 26px;display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ err.tips }}" as="tip" hint-placeholder-count="3"><li style="display:flex;gap:10px;font-size:14px;color:var(--color-neutral-200);line-height:1.45"><i class="ph ph-arrow-bend-down-right" style="color:var(--color-accent-300);flex:none;margin-top:2px"></i>{{ tip }}</li></sc-for>
+  </ul>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" onClick="{{ err.primary }}">{{ err.primaryLabel }}</button><button class="btn btn-ghost" onClick="{{ err.secondary }}">{{ err.secondaryLabel }}</button></div>
+</div>
+</sc-if>
+
+</main>
+
+<!-- API trace -->
+<div style="border-top:1px solid var(--color-divider);padding:12px {{ pad }}">
+  <button class="btn btn-ghost" onClick="{{ toggleTrace }}" style="font-size:12px;padding:4px 8px;margin-left:-8px"><i class="ph ph-brackets-curly"></i>API trace <i class="{{ traceIcon }}"></i></button>
+  <sc-if value="{{ showTrace }}" hint-placeholder-val="{{ false }}">
+    <pre style="margin:10px 0 0;padding:12px;border-radius:var(--radius-md);background:var(--color-surface);font-size:11.5px;line-height:1.5;color:var(--color-neutral-300);overflow:auto;max-height:260px;white-space:pre-wrap">{{ traceText }}</pre>
+  </sc-if>
+</div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { screen:'home', type:'BOOKING_CODE', value:'', inlineErr:'', flights:[], sel:null, errKind:null, submitting:false, ci:null, done:{}, mode:'auto', w:1200, trace:[], showTrace:false, copied:false, jump:'' };
+  componentDidMount(){ const f=()=>this.setState({w:window.innerWidth}); f(); window.addEventListener('resize',f); }
+  CITY = { GRU:'São Paulo', LIS:'Lisbon', SSA:'Salvador', GIG:'Rio de Janeiro', MAD:'Madrid', CDG:'Paris' };
+  FL = {
+    MF214:{flightId:'f-7c21a9',flightNumber:'MF 214',origin:'GRU',destination:'LIS',departureTime:'2026-11-01T21:40:00',checkinAvailable:true,gate:'B14',board:'2026-11-01T21:00:00'},
+    MF215:{flightId:'f-7c21b4',flightNumber:'MF 215',origin:'LIS',destination:'GRU',departureTime:'2026-11-09T11:15:00',checkinAvailable:false,gate:'A07',board:'2026-11-09T10:35:00'},
+    MF3010:{flightId:'f-9d0330',flightNumber:'MF 3010',origin:'GRU',destination:'SSA',departureTime:'2026-11-01T18:05:00',checkinAvailable:false,cancelled:true,gate:'C02',board:'2026-11-01T17:25:00'},
+    MF880:{flightId:'f-3a8800',flightNumber:'MF 880',origin:'GIG',destination:'MAD',departureTime:'2026-11-02T23:30:00',checkinAvailable:true,gate:'D21',board:'2026-11-02T22:50:00'}
+  };
+  MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; DW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  dt(iso){ const d=new Date(iso+'Z'); return {t:iso.slice(11,16), d:`${this.DW[d.getUTCDay()]}, ${d.getUTCDate()} ${this.MO[d.getUTCMonth()]}`}; }
+  opens(iso){ const d=new Date(Date.parse(iso+'Z')-72*36e5); return `${d.getUTCDate()} ${this.MO[d.getUTCMonth()]} at ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`; }
+  isMobile(){ return this.state.mode==='mobile' || (this.state.mode==='auto' && this.state.w<780); }
+  log(method,path,req,res){ this.setState(s=>({trace:[...s.trace,{method,path,req,res}].slice(-4)})); }
+  go(screen,extra){ this.setState({screen,jump:'',...extra}); }
+  err(kind){ this.go('error',{errKind:kind,submitting:false}); }
+  pickType(t){ this.setState({type:t,value:'',inlineErr:''}); }
+  CFG = {
+    FLIGHT_NUMBER:{label:'Flight number',icon:'ph ph-airplane-tilt',ph:'e.g. MF 214',hint:'Two letters followed by 2–4 digits.',tab:'Flight number',tab_icon:'ph ph-airplane'},
+    BOOKING_CODE:{label:'Booking code',icon:'ph ph-ticket',ph:'e.g. MAIA7K',hint:'6 letters or digits, found in your confirmation email.',tab:'Booking code',tab_icon:'ph ph-ticket'},
+    DOCUMENT:{label:'Personal document',icon:'ph ph-identification-card',ph:'e.g. 123.456.789-09',hint:'The ID or passport used when booking.',tab:'Document',tab_icon:'ph ph-identification-card'}
+  };
+  search(){
+    const {type}=this.state, v=this.state.value.trim();
+    if(!v){ this.setState({inlineErr:'Enter your '+this.CFG[type].label.toLowerCase()+' to continue.'}); return; }
+    this.go('loading',{inlineErr:''});
+    setTimeout(()=>{
+      const req={searchType:type,value:v}; let ok=true, list=[], k=null;
+      const up=v.toUpperCase().replace(/\s/g,'');
+      if(/^ERR/.test(up)) k='api';
+      else if(type==='FLIGHT_NUMBER'){ if(!/^[A-Z]{2}\d{2,4}$/.test(up)) k='invalid'; else if(this.FL[up]) list=[this.FL[up]]; else k='notfound'; }
+      else if(type==='BOOKING_CODE'){ if(!/^[A-Z0-9]{6}$/.test(up)) k='invalid'; else if(up==='MAIA7K') list=[this.FL.MF214,this.FL.MF215,this.FL.MF3010]; else if(up==='MAIA2X') list=[this.FL.MF880]; else k='none'; }
+      else { if(!/^[\w.\-]{6,20}$/.test(v)) k='invalid'; else if(/^9{3}/.test(v)) k='none'; else list=[this.FL.MF214,this.FL.MF215]; }
+      const strip=f=>({flightId:f.flightId,flightNumber:f.flightNumber,origin:f.origin,destination:f.destination,departureTime:f.departureTime,checkinAvailable:f.checkinAvailable});
+      this.log('POST','/checkins/flights/search',req,k==='api'?{status:500}:k==='invalid'?{status:400}:k==='notfound'?{status:404}:{flights:list.map(strip)});
+      if(k) this.err(k); else this.go('results',{flights:list});
+    },1400);
+  }
+  select(f){
+    if(this.state.done[f.flightId]) return this.go('error',{errKind:'already',sel:f});
+    if(f.cancelled) return this.go('error',{errKind:'cancelled',sel:f});
+    if(!f.checkinAvailable) return this.go('error',{errKind:'window',sel:f});
+    this.go('details',{sel:f});
+  }
+  confirm(){
+    const f=this.state.sel; this.setState({submitting:true});
+    setTimeout(()=>{
+      const pid='psg-'+(this.state.type==='DOCUMENT'?'doc-':'bk-')+(this.state.value.replace(/\W/g,'').slice(-4)||'0000').toLowerCase();
+      const res={checkinId:'MF-7K2Q9X',status:'CONFIRMED',boardingGate:f.gate,boardingTime:f.board};
+      this.log('POST','/checkins',{flightId:f.flightId,passengerId:pid},res);
+      this.go('success',{submitting:false,ci:res,done:{...this.state.done,[f.flightId]:true}});
+    },1600);
+  }
+  jump(v){
+    if(!v) return;
+    const f=this.state.sel||this.FL.MF214;
+    if(v==='loading'){ this.go('loading'); setTimeout(()=>this.state.screen==='loading'&&this.go('home'),3500); return; }
+    this.go('error',{errKind:v,sel:f});
+  }
+  render(){}
+  renderVals(){
+    const S=this.state, m=this.isMobile(), mock=S.mode==='mobile';
+    const cfg=this.CFG[S.type], sc=S.screen, sel=S.sel||this.FL.MF214;
+    const TONE={ok:'oklch(0.82 0.13 160)',warn:'oklch(0.84 0.12 80)',bad:'oklch(0.74 0.14 25)',acc:'var(--color-accent)',mut:'var(--color-neutral-400)'};
+    const v={};
+    Object.assign(v,{
+      frameW:mock?'390px':'1200px', frameMargin:mock?'24px auto':'0 auto', frameBorder:mock?'1px solid var(--color-divider)':'0', frameRadius:mock?'32px':'0',
+      pad:m?'20px':'48px', mainPad:m?'24px 20px 40px':'32px 48px 64px', cardPad:m?'16px':'22px',
+      h1Size:m?'42px':'clamp(48px,6vw,68px)', h2Size:m?'28px':'38px', codeSize:m?'30px':'38px', bigCode:m?'44px':'64px', routeGap:m?'10px':'20px',
+      homeCols:m?'1fr':'minmax(0,1.1fr) minmax(0,.9fr)', homeGap:m?'32px':'56px', okCols:m?'1fr':'minmax(0,1fr) minmax(0,1fr)', passAlign:m?'stretch':'end',
+      detCols:m?'1fr':'minmax(0,1.5fr) minmax(0,1fr)', infoCols:m?'1fr 1fr':'repeat(3,1fr)', asidePos:m?'static':'sticky',
+      showHeroArt:!m||true, showHelp:!m,
+      viewIcon:mock?'ph ph-desktop':'ph ph-device-mobile', viewLabel:mock?'Desktop view':'Mobile view',
+      toggleView:()=>this.setState({mode:mock?'auto':'mobile'}),
+      jumpVal:S.jump, onJump:e=>this.jump(e.target.value),
+      goHome:e=>{ e&&e.preventDefault&&e.preventDefault(); this.go('home',{value:''}); },
+      isHome:sc==='home', isLoading:sc==='loading', isResults:sc==='results', isDetails:sc==='details', isSuccess:sc==='success', isError:sc==='error',
+      showSteps:sc!=='home' && sc!=='error' || sc==='loading',
+      backToResults:()=>this.go(S.flights.length?'results':'home'),
+    });
+    // stepper
+    const idx={loading:0,results:1,details:2,success:3}[sc]??0;
+    const names=['Find','Choose','Confirm','Boarding pass'];
+    v.stepGap=m?'6px':'14px';
+    v.steps=names.map((label,i)=>{const done=i<idx,cur=i===idx;return{n:done?'✓':i+1,label,flex:i<3?'1':'0 0 auto',showLabel:!m||cur,bc:done||cur?'var(--color-accent)':'var(--color-neutral-700)',bg:done?'var(--color-accent)':'transparent',fg:done?'var(--color-bg)':cur?'var(--color-accent-200)':'var(--color-neutral-500)',tc:cur?'var(--color-text)':done?'var(--color-neutral-300)':'var(--color-neutral-500)',line:done?'var(--color-accent)':'var(--color-neutral-700)',lineDisp:i<3?'block':'none'}});
+    // home
+    v.tabs=Object.keys(this.CFG).map(k=>{const on=S.type===k;return{label:this.CFG[k].tab,icon:this.CFG[k].tab_icon,on,pick:()=>this.pickType(k),bg:on?'color-mix(in srgb,var(--color-accent) 16%,transparent)':'transparent',bc:on?'var(--color-accent)':'transparent',fg:on?'var(--color-accent-100)':'var(--color-neutral-400)'}});
+    Object.assign(v,{fieldLabel:cfg.label,fieldIcon:cfg.icon,placeholder:cfg.ph,value:S.value,tracking:S.type==='BOOKING_CODE'?'.1em':'0',
+      hasInlineErr:!!S.inlineErr, hint:S.inlineErr||cfg.hint, hintColor:S.inlineErr?TONE.bad:'var(--color-neutral-500)', hintIcon:S.inlineErr?'ph ph-warning-circle':'ph ph-info',
+      onValue:e=>this.setState({value:e.target.value,inlineErr:''}), submit:e=>{e.preventDefault();this.search();}, typeLabel:cfg.label});
+    v.demos=[['BOOKING_CODE','MAIA7K'],['FLIGHT_NUMBER','MF 214'],['DOCUMENT','123.456.789-09']].map(([t,val])=>({label:val,fill:()=>this.setState({type:t,value:val,inlineErr:''})}));
+    // loading
+    v.loadingMsg='Searching for your flights…'; v.skeletons=[{delay:'0s'},{delay:'.2s'}];
+    // results
+    const n=S.flights.length; v.resultsTitle=n===1?'1 flight found':n+' flights found';
+    v.cards=S.flights.map(f=>{
+      const d=this.dt(f.departureTime), done=S.done[f.flightId];
+      let tone=TONE.ok,tagLabel='Check-in available',tagIcon='ph-fill ph-check-circle',note='Check-in is open',btnLabel='Continue',btnClass='btn-primary',border='var(--color-divider)',opacity='1';
+      if(done){tone=TONE.acc;tagLabel='Checked in';tagIcon='ph-fill ph-seal-check';note='Already completed';btnLabel='View status';btnClass='btn-secondary';}
+      else if(f.cancelled){tone=TONE.bad;tagLabel='Cancelled';tagIcon='ph-fill ph-x-circle';note='This flight was cancelled';btnLabel='See options';btnClass='btn-secondary';border='color-mix(in srgb,'+TONE.bad+' 35%,transparent)';opacity='.85';}
+      else if(!f.checkinAvailable){tone=TONE.warn;tagLabel='Not yet available';tagIcon='ph-fill ph-clock';note='Opens '+this.opens(f.departureTime);btnLabel='Details';btnClass='btn-secondary';}
+      return{id:f.flightId,number:f.flightNumber,o:f.origin,d:f.destination,oCity:this.CITY[f.origin],dCity:this.CITY[f.destination],time:d.t,date:d.d,tone,tagLabel,tagIcon,note,btnLabel,btnClass,border,opacity,select:()=>this.select(f)};
+    });
+    // details
+    const dd=this.dt(sel.departureTime), bd=this.dt(sel.board);
+    v.sel={number:sel.flightNumber,o:sel.origin,d:sel.destination,oCity:this.CITY[sel.origin],dCity:this.CITY[sel.destination],date:dd.d+' '+'2026'};
+    const ready=sc==='details';
+    v.info=[
+      {icon:'ph ph-airplane',label:'Flight',value:sel.flightNumber,color:'var(--color-text)'},
+      {icon:'ph ph-calendar-blank',label:'Date',value:dd.d,color:'var(--color-text)'},
+      {icon:'ph ph-airplane-takeoff',label:'Departure',value:dd.t,color:'var(--color-text)'},
+      {icon:'ph ph-users-three',label:'Boarding',value:'After check-in',color:'var(--color-neutral-400)'},
+      {icon:'ph ph-door',label:'Gate',value:'After check-in',color:'var(--color-neutral-400)'},
+      {icon:'ph ph-check-circle',label:'Check-in',value:'Open',color:TONE.ok}];
+    const tl=[['ph ph-magnifying-glass','Reservation found','Flight located via '+cfg.label.toLowerCase(),'done'],['ph ph-check-square','Check-in','Confirm below — takes a few seconds','cur'],['ph ph-users-three','Boarding','Time and gate issued at check-in','todo'],['ph ph-airplane-takeoff','Departure · '+dd.t,this.CITY[sel.origin]+' ('+sel.origin+')','todo'],['ph ph-airplane-landing','Arrival',this.CITY[sel.destination]+' ('+sel.destination+')','todo']];
+    v.timeline=tl.map(([icon,title,sub,st],i)=>({icon:st==='done'?'ph ph-check':icon,title,sub,bc:st==='todo'?'var(--color-neutral-700)':'var(--color-accent)',bg:st==='done'?'var(--color-accent)':st==='cur'?'color-mix(in srgb,var(--color-accent) 18%,transparent)':'transparent',fg:st==='done'?'var(--color-bg)':st==='cur'?'var(--color-accent-200)':'var(--color-neutral-500)',tc:st==='todo'?'var(--color-neutral-300)':'var(--color-text)',line:st==='done'?'var(--color-accent)':'var(--color-neutral-700)',lineDisp:i<4?'block':'none',pb:i<4?'14px':'0'}));
+    v.summary=[{k:'Route',v:sel.origin+' → '+sel.destination},{k:'Flight',v:sel.flightNumber},{k:'Departs',v:dd.d+' · '+dd.t},{k:'Status',v:'Check-in open'}];
+    v.passengerNote=S.type==='DOCUMENT'?'Passenger is identified from the document you entered.':'Passenger is identified from the reservation you searched with.';
+    v.submitting=S.submitting; v.confirmLabel=S.submitting?'Confirming…':'Confirm check-in'; v.confirmCheckin=()=>this.confirm();
+    // success
+    const ci=S.ci||{checkinId:'MF-7K2Q9X',status:'CONFIRMED',boardingGate:'B14',boardingTime:sel.board};
+    const bt=this.dt(ci.boardingTime);
+    v.ci={id:ci.checkinId,status:ci.status,gate:ci.boardingGate,boardTime:bt.t};
+    v.passFields=[{k:'Flight',v:sel.flightNumber,size:'18px'},{k:'Date',v:dd.d.split(', ')[1],size:'18px'},{k:'Departs',v:dd.t,size:'18px'},{k:'Boarding',v:bt.t,size:'18px'},{k:'Gate',v:ci.boardingGate,size:'18px'},{k:'Status',v:ci.status,size:'13px'}];
+    v.copyIcon=S.copied?'ph ph-check':'ph ph-copy';
+    v.copyCode=()=>{ try{navigator.clipboard.writeText(ci.checkinId);}catch(e){} this.setState({copied:true}); setTimeout(()=>this.setState({copied:false}),1500); };
+    // errors
+    const again=()=>this.go('home',{value:''}), edit=()=>this.go('home'), back=()=>this.go(S.flights.length?'results':'home'), retry=()=>this.search();
+    const E={
+      invalid:{icon:'ph ph-warning-circle',tone:TONE.warn,kicker:'Invalid '+cfg.label.toLowerCase(),title:"That doesn't look right",body:'The '+cfg.label.toLowerCase()+' you entered is not in a valid format, so we haven\'t searched yet.',tips:[S.type==='BOOKING_CODE'?'A booking code has 6 letters or digits, like MAIA7K.':S.type==='FLIGHT_NUMBER'?'Flight numbers look like MF 214 — two letters and 2–4 digits.':'Use the same document you registered at booking, 6–20 characters.','Check for typos or swapped characters (0 and O, 1 and I).'],pl:'Edit and try again',sl:'Search another way',p:edit,s:edit},
+      none:{icon:'ph ph-airplane-tilt',tone:TONE.acc,kicker:'No flights found',title:'No flights to check in for',body:'We found no upcoming flights linked to what you entered.',tips:['Make sure you used the details from your latest booking.','Try another search type — your booking code or document.','Check-in only lists flights that haven\'t departed yet.'],pl:'Try another search',sl:'Back to start',p:edit,s:again},
+      notfound:{icon:'ph ph-map-pin-line',tone:TONE.acc,kicker:'Flight not found',title:"We couldn't locate that flight",body:'No flight matches '+(S.value||'that number')+'. It may have a different number or already be operated by a partner.',tips:['Find the flight number on your e-ticket or confirmation email.','Search with your booking code instead.'],pl:'Search again',sl:'Use booking code',p:edit,s:()=>this.go('home',{type:'BOOKING_CODE',value:''})},
+      window:{icon:'ph ph-clock-countdown',tone:TONE.warn,kicker:'Check-in not open yet',title:'Check-in opens '+this.opens(sel.departureTime),body:'Online check-in is available up to 72 hours before departure for '+sel.flightNumber+' ('+sel.origin+' → '+sel.destination+', '+dd.d+' · '+dd.t+').',tips:['Come back once the window opens — nothing is lost.','Your reservation stays safe in the meantime.'],pl:'Back to my flights',sl:'New search',p:back,s:again},
+      cancelled:{icon:'ph ph-x-circle',tone:TONE.bad,kicker:'Flight cancelled',title:sel.flightNumber+' has been cancelled',body:'Check-in isn\'t possible for this flight. We\'re sorry for the disruption to your plans.',tips:['Look for a rebooking confirmation in your email.','Contact MaiaFlight support to choose a new flight or request a refund.'],pl:'Back to my flights',sl:'New search',p:back,s:again},
+      already:{icon:'ph ph-seal-check',tone:TONE.ok,kicker:'Already checked in',title:"You're already checked in",body:'Check-in for '+sel.flightNumber+' ('+sel.origin+' → '+sel.destination+') was completed earlier. There\'s nothing more to do.',tips:['Keep your confirmation code handy for the airport.','Arrive at the gate before boarding time.'],pl:'View my check-in',sl:'New search',p:()=>this.go(S.ci?'success':'home'),s:again},
+      api:{icon:'ph ph-wifi-slash',tone:TONE.bad,kicker:'Something went wrong',title:"We can't reach MaiaFlight right now",body:'The request didn\'t go through, and it isn\'t anything you did. Your data wasn\'t changed.',tips:['Check your connection and try again in a moment.','If it keeps happening, contact support — we\'ll help you check in manually.'],pl:'Try again',sl:'Back to start',p:()=>S.value?retry():again(),s:again}
+    };
+    const e=E[S.errKind||'api'];
+    v.err={icon:e.icon,tone:e.tone,kicker:e.kicker,title:e.title,body:e.body,tips:e.tips,primaryLabel:e.pl,secondaryLabel:e.sl,primary:e.p,secondary:e.s};
+    // trace
+    v.showTrace=S.showTrace; v.toggleTrace=()=>this.setState({showTrace:!S.showTrace}); v.traceIcon=S.showTrace?'ph ph-caret-up':'ph ph-caret-down';
+    v.traceText=S.trace.length?S.trace.map(t=>`${t.method} ${t.path}\n→ ${JSON.stringify(t.req)}\n← ${JSON.stringify(t.res)}`).join('\n\n'):'Requests to the documented endpoints appear here as you use the prototype.';
+    return v;
+  }
+}
+
+</script>
+</body>
+</html>

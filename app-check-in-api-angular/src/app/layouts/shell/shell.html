@@ -1,0 +1,75 @@
+<div
+  class="flex min-h-screen flex-col bg-[radial-gradient(1100px_520px_at_12%_-8%,var(--color-accent-900),transparent_70%)]"
+>
+  <a
+    href="#content"
+    class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
+  >
+    Skip to content
+  </a>
+
+  <header
+    class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-12"
+  >
+    <a routerLink="/search" class="flex items-center gap-2.5 text-ink no-underline hover:text-ink">
+      <span
+        class="grid size-8 place-items-center rounded-full border border-accent text-accent shadow-[0_0_18px_color-mix(in_srgb,var(--color-accent)_35%,transparent)]"
+      >
+        <i mfIcon="airplane-tilt" fill class="text-base"></i>
+      </span>
+      <span class="text-lg font-medium tracking-tight"
+        >Maia<span class="text-accent-300">Flight</span></span
+      >
+    </a>
+
+    <nav class="flex items-center gap-2" aria-label="Main">
+      <span class="hidden sm:inline-flex">
+        <mf-tag tone="outline"><i mfIcon="airplane-takeoff"></i>Online check-in</mf-tag>
+      </span>
+      @if (testScenarios.available()) {
+        <a
+          mfBtn
+          variant="ghost"
+          routerLink="/test-data"
+          routerLinkActive="bg-neutral-700/30"
+          aria-label="Test data"
+          class="px-2.5 py-1.5 text-xs"
+        >
+          <i mfIcon="flask"></i><span class="hidden sm:inline">Test data</span>
+        </a>
+      }
+      <button mfBtn variant="ghost" class="px-2 py-1.5" aria-label="Help" (click)="openHelp()">
+        <i mfIcon="question" class="text-lg"></i>
+      </button>
+    </nav>
+  </header>
+
+  <app-stepper />
+
+  <main id="content" class="mx-auto w-full max-w-6xl flex-1 px-5 pb-16 pt-6 sm:px-12 sm:pt-8">
+    <router-outlet />
+  </main>
+
+  <app-site-footer />
+</div>
+
+<dialog
+  #helpDialog
+  class="m-auto w-[min(92vw,30rem)] rounded-lg border border-divider bg-surface p-0 text-ink shadow-elev-lg backdrop:bg-black/60"
+  aria-labelledby="help-title"
+  (click)="$event.target === helpDialog ? closeHelp() : null"
+>
+  <div class="flex flex-col gap-4 p-6">
+    <h2 id="help-title" class="text-xl font-medium">How check-in works</h2>
+    <ol class="flex list-decimal flex-col gap-2 pl-5 text-sm text-neutral-300">
+      <li>Find your reservation by flight number, booking code or personal document.</li>
+      <li>Pick the flight you want to check in for.</li>
+      <li>Confirm — you get your boarding gate and boarding time.</li>
+    </ol>
+    <p class="text-sm text-neutral-300">
+      Check-in opens 72 hours before departure and closes at departure. Flights whose check-in is
+      not open yet are listed, but cannot be confirmed.
+    </p>
+    <button mfBtn variant="secondary" class="self-end" (click)="closeHelp()">Close</button>
+  </div>
+</dialog>

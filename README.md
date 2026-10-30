@@ -1,546 +1,268 @@
-# ✈️ MaiaFlight — Check-in API
+# ✈️ MaiaFlight Check-in
 
-Digital passenger check-in backend for MaiaFlight.  
-**Stack:** Kotlin · Spring Boot 4 · Spring MVC · Virtual Threads (Project Loom)  
-**Architecture:** Clean Architecture · Use Case pattern · Strategy pattern · SOLID
+> A full-stack online check-in for a fictitious airline: a **Kotlin / Spring Boot** API and an **Angular** web app, built contract-first, tested end to end and developed with **Claude Code** as an AI pair programmer.
 
----
+![Kotlin](https://img.shields.io/badge/-Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/-Spring%20Boot-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![Angular](https://img.shields.io/badge/-Angular-DD0031?style=flat-square&logo=angular&logoColor=white)
+![TypeScript](https://img.shields.io/badge/-TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/-Tailwind%20CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Claude Code](https://img.shields.io/badge/-Claude%20Code-D97757?style=flat-square&logo=claude&logoColor=white)
 
-## Table of Contents
+![MaiaFlight check-in flow: search, flights list, a flight without check-in, back to the list, an open flight and the boarding pass](docs/assets/maiaflight-check-in-flow.gif)
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Layer Responsibilities](#layer-responsibilities)
-- [Endpoints](#endpoints)
-- [Design Decisions](#design-decisions)
-- [Applied Patterns](#applied-patterns)
-- [Thread Safety & Concurrency](#thread-safety--concurrency)
-- [Observability](#observability)
-- [Virtual Threads](#virtual-threads-project-loom)
-- [Testing](#testing)
-- [Running Locally](#running-locally)
-- [Sequence Diagrams (UML)](#sequence-diagrams-uml)
+## 📚 Table of Contents
 
----
+- [About the project](#-about-the-project)
+- [Technologies](#-technologies)
+- [Architecture](#-architecture)
+- [Repository layout](#-repository-layout)
+- [Getting started](#-getting-started)
+- [Trying the flow](#-trying-the-flow)
+- [The API at a glance](#-the-api-at-a-glance)
+- [The web app at a glance](#-the-web-app-at-a-glance)
+- [Quality](#-quality)
+- [Built with an AI assistant](#-built-with-an-ai-assistant)
+- [Decisions and known limits](#-decisions-and-known-limits)
+- [Documentation](#-documentation)
+- [Author](#-author)
 
-## Overview
+## 🧭 About the project
 
-Passengers check in up to **72 hours** before departure by locating their booking through one of three strategies:
+Passengers find their reservation, pick a flight and get a **boarding gate and boarding time** — no queues, no paper. The rules live in the API; the app only shows what the API says.
 
-| Search type | Example value |
-|---|---|
-| Flight number | `MF100` |
-| Booking code (locator) | `ABC123` |
-| Personal document (CPF) | `123.456.789-00` |
+- **Three ways to find a flight:** flight number, booking code or personal document.
+- **Check-in window:** open from **72 hours before departure** until departure.
+- **Honest availability:** flights whose check-in is not open yet, or that were cancelled, are listed too, with the reason, instead of silently disappearing.
+- **No duplicates:** the same passenger cannot check in twice on a flight, even under concurrent requests.
+- **Stable errors:** every failure carries a machine-readable `code`, so the app never guesses from message text.
+- **Built to be demoed:** fictitious seed data, a **Test data** page with ready-made scenarios and a one-click reset.
 
-After a successful check-in, a domain event is published so downstream services can send the boarding confirmation e-mail.
+> All names, documents and codes are **fictitious**. MaiaFlight is a demo product, not a real airline.
 
----
+## ⚡ Technologies
 
-## Architecture
+**Backend** — `api-check-in-api-kotlin`
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                           api/                                  │
-│  CheckinController     implements CheckinsApi (OpenAPI)        │
-│  GlobalExceptionHandler  translates exceptions → HTTP status   │
-└───────────────────────────────┬────────────────────────────────┘
-                                │ input objects
-┌───────────────────────────────▼────────────────────────────────┐
-│                       application/                              │
-│  SearchFlightsUseCase   (interface)                            │
-│  PerformCheckinUseCase  (interface)                            │
-│  impl/  SearchFlightsUseCaseImpl                               │
-│  impl/  PerformCheckinUseCaseImpl                              │
-│  input/ SearchFlightsInput · PerformCheckinInput               │
-│  port/  FlightRepository · PassengerRepository                 │
-│         CheckinRepository · EventPublisher  (interfaces)       │
-└───────────────────────────────┬────────────────────────────────┘
-                                │ domain objects
-┌───────────────────────────────▼────────────────────────────────┐
-│                         domain/                                 │
-│  model/    Flight · Passenger · Checkin · FlightStatus         │
-│  policy/   CheckinPolicy ◄── HoursBeforeDeparturePolicy        │
-│  strategy/ FlightSearchStrategy ◄── FlightNumberSearchStrategy │
-│                                ◄── BookingCodeSearchStrategy   │
-│                                ◄── DocumentSearchStrategy      │
-│            FlightSearchStrategyResolver                        │
-│  event/    CheckinCompletedEvent                               │
-└───────────────────────────────┬────────────────────────────────┘
-                                │ implements ports
-┌───────────────────────────────▼────────────────────────────────┐
-│                     infrastructure/                             │
-│  InMemoryFlightRepository   InMemoryPassengerRepository        │
-│  InMemoryCheckinRepository  LoggingEventPublisher              │
-└────────────────────────────────────────────────────────────────┘
-                                │ wires everything
-┌───────────────────────────────▼────────────────────────────────┐
-│                       config/                                   │
-│  ApplicationConfig   @Bean declarations (no Spring in domain)  │
-└────────────────────────────────────────────────────────────────┘
-```
+![Kotlin](https://img.shields.io/badge/-Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Java](https://img.shields.io/badge/-Java-007396?style=flat-square&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/-Spring%20Boot-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![Spring MVC](https://img.shields.io/badge/-Spring%20MVC-6DB33F?style=flat-square&logo=spring&logoColor=white)
+![Maven](https://img.shields.io/badge/-Maven-C71A36?style=flat-square&logo=apachemaven&logoColor=white)
+![OpenAPI](https://img.shields.io/badge/-OpenAPI-6BA539?style=flat-square&logo=openapiinitiative&logoColor=white)
+![Kotest](https://img.shields.io/badge/-Kotest-7F52FF?style=flat-square)
+![MockK](https://img.shields.io/badge/-MockK-7F52FF?style=flat-square)
+![JUnit](https://img.shields.io/badge/-JUnit%205-25A162?style=flat-square&logo=junit5&logoColor=white)
 
----
+**Frontend** — `app-check-in-api-angular`
 
-## Layer Responsibilities
+![Angular](https://img.shields.io/badge/-Angular%2021-DD0031?style=flat-square&logo=angular&logoColor=white)
+![TypeScript](https://img.shields.io/badge/-TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)
+![RxJS](https://img.shields.io/badge/-RxJS-B7178C?style=flat-square&logo=reactivex&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/-Tailwind%20CSS%204-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![ApexCharts](https://img.shields.io/badge/-ApexCharts-008FFB?style=flat-square)
+![Vitest](https://img.shields.io/badge/-Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)
+![Prettier](https://img.shields.io/badge/-Prettier-F7B93E?style=flat-square&logo=prettier&logoColor=black)
+![Node.js](https://img.shields.io/badge/-Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)
 
-### `api/` — HTTP Adapter
+**Platform and delivery**
 
-| Class | Responsibility |
-|---|---|
-| `CheckinController` | Accept requests, map to input objects, delegate to use cases, map results to response models. Contains **no business logic**. |
-| `GlobalExceptionHandler` | Translate domain exceptions into standardised HTTP status codes and error bodies. |
-| `DomainExceptions` | Typed exception hierarchy: `FlightNotFoundException`, `PassengerNotFoundException`, `CheckinNotAllowedException`, `CheckinAlreadyExistsException`. |
+![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Docker Compose](https://img.shields.io/badge/-Docker%20Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/-Nginx-009639?style=flat-square&logo=nginx&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
+![Dependabot](https://img.shields.io/badge/-Dependabot-025E8C?style=flat-square&logo=dependabot&logoColor=white)
+![Git](https://img.shields.io/badge/-Git-F05032?style=flat-square&logo=git&logoColor=white)
 
-### `application/` — Use Case Orchestration
+**AI-assisted development**
 
-| Class | Responsibility |
-|---|---|
-| `SearchFlightsUseCase` | Interface declaring the flight-search contract. |
-| `PerformCheckinUseCase` | Interface declaring the check-in contract. |
-| `SearchFlightsUseCaseImpl` | Validates input → resolves strategy → searches → filters by policy. |
-| `PerformCheckinUseCaseImpl` | Loads resources → applies policy → atomic save → publishes event. |
-| `SearchFlightsInput` / `PerformCheckinInput` | Immutable value objects carrying use case input data. |
-| `port/*` | Output port interfaces (repositories, event publisher) — the domain never imports infrastructure. |
+![Claude Code](https://img.shields.io/badge/-Claude%20Code-D97757?style=flat-square&logo=claude&logoColor=white)
+![Anthropic](https://img.shields.io/badge/-Anthropic-191919?style=flat-square&logo=anthropic&logoColor=white)
 
-### `domain/` — Business Rules
-
-| Class | Responsibility |
-|---|---|
-| `Flight`, `Passenger`, `Checkin` | Immutable domain entities modelled as `data class`. |
-| `FlightStatus`, `SearchType` | Type-safe enums preventing stringly-typed bugs. |
-| `CheckinPolicy` | Interface: is a flight eligible for check-in right now? |
-| `HoursBeforeDeparturePolicy` | Implements the 72-hour window rule and status guard. |
-| `FlightSearchStrategy` | Interface: find flights by a given search criterion. |
-| `FlightNumberSearchStrategy` | Finds flights by exact flight number. |
-| `BookingCodeSearchStrategy` | Finds flights by booking code (PNR locator). |
-| `DocumentSearchStrategy` | Finds flights by passenger CPF/passport via `PassengerRepository`. |
-| `FlightSearchStrategyResolver` | Resolves the correct strategy from `SearchType` at runtime. |
-| `CheckinCompletedEvent` | Immutable domain event carrying email and flight ID for downstream consumers. |
-
-### `infrastructure/` — Adapters (Implements Ports)
-
-| Class | Responsibility |
-|---|---|
-| `InMemoryFlightRepository` | Thread-safe in-memory flight store (read-only; pre-loaded sample data). |
-| `InMemoryPassengerRepository` | Thread-safe in-memory passenger store (read-only; pre-loaded sample data). |
-| `InMemoryCheckinRepository` | `ConcurrentHashMap`-backed store; `saveIfAbsent` is atomic (see [Thread Safety](#thread-safety--concurrency)). |
-| `LoggingEventPublisher` | Publishes events to SLF4J logs. Replace with `KafkaEventPublisher` for production. |
-
----
-
-## Endpoints
-
-Full contract: [`src/main/resources/openapi/check-in-api.yaml`](src/main/resources/openapi/check-in-api.yaml)
-
-### `POST /checkins/flights/search`
-
-Searches for flights available for check-in.
-
-**Request body**
-```json
-{
-  "searchType": "FLIGHT_NUMBER",
-  "value": "MF100"
-}
-```
-
-`searchType` values: `FLIGHT_NUMBER` | `BOOKING_CODE` | `DOCUMENT`
-
-**Response `200 OK`**
-```json
-{
-  "flights": [
-    {
-      "flightId": "FL-001",
-      "flightNumber": "MF100",
-      "origin": "GRU",
-      "destination": "JFK",
-      "departureTime": "2026-04-04T14:00:00Z",
-      "checkinAvailable": true
-    }
-  ]
-}
-```
-
----
-
-### `POST /checkins`
-
-Performs a passenger check-in.
-
-**Request body**
-```json
-{
-  "flightId": "FL-001",
-  "passengerId": "P-001"
-}
-```
-
-**Response `201 Created`**
-```json
-{
-  "checkinId": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "CONFIRMED",
-  "boardingGate": "A1",
-  "boardingTime": "2026-04-04T13:30:00Z"
-}
-```
-
-**Error responses**
-
-| HTTP status | Trigger |
-|---|---|
-| `400 Bad Request` | Search value is blank |
-| `404 Not Found` | Flight or passenger does not exist |
-| `409 Conflict` | Check-in window closed, flight cancelled, or duplicate check-in |
-
----
-
-## Design Decisions
-
-### Why `POST` and not `GET` for the flight search?
-
-A `GET /checkins/flights/search?type=DOCUMENT&value=123.456.789-00` would violate OWASP:
-
-1. **Sensitive data in URLs**: personal document numbers (CPF, passport) appear in server access logs, browser history, and proxy caches in plain text — even over HTTPS.
-2. **Structured payload**: the `searchType` + `value` pair is an object with semantics. A JSON body models it more clearly than query parameters, and future optional filters (e.g., date range) are added without breaking the API contract.
-3. **Consistency**: both endpoints mutate or query state based on a structured request — `POST` keeps the API semantically uniform.
-
-> Reference: [OWASP — Sensitive Data in Query Strings](https://owasp.org/www-community/vulnerabilities/Information_exposure_through_query_strings_in_url)
-
----
-
-### Immutability with `data class` and `val`
-
-All domain entities are declared as `data class` with only `val` fields:
-
-```kotlin
-data class Flight(
-    val id: String,
-    val flightNumber: String,
-    val departureTime: LocalDateTime,
-    val status: FlightStatus,
-    val passengerIds: List<String>
-)
-```
-
-**Why it matters:**
-- **Thread safety**: immutable objects can be safely shared across concurrent virtual threads without locks or synchronisation.
-- **Predictability**: `HoursBeforeDeparturePolicy.canCheckin(flight)` can never mutate the `flight` it receives — it is a pure function.
-- **Safe equality**: `data class` generates `equals`/`hashCode` from all fields, making domain objects safe to use in collections and Kotest matchers.
-- **Controlled updates**: any modification produces a new object via `copy()`, making state changes explicit and traceable.
-
----
-
-### Use Case pattern vs. Command pattern
-
-The previous implementation used a generic `CommandHandler<C, R>` interface. This was replaced with specific use case interfaces for the following reasons:
-
-| Concern | Command pattern | Use Case pattern |
+| Area | What is used | Why |
 |---|---|---|
-| Readability | `handler.handle(SearchFlightsCommand(...))` — generic, requires knowing types | `useCase.execute(SearchFlightsInput(...))` — self-documenting |
-| Discoverability | `CommandHandler<C, R>` with type erasure — IDE autocomplete less helpful | `SearchFlightsUseCase.execute(...)` — types are explicit |
-| Complexity | Extra level of indirection (Command object + CommandHandler interface + impl) | Input object + interface + impl — one less layer |
-| DIP compliance | Both honour DIP equally | Both honour DIP equally |
+| API | Kotlin 2.2, Spring Boot 4, Spring MVC on **virtual threads**, Java 24+ | Idiomatic, concise backend; high concurrency without reactive code |
+| Contract | **OpenAPI 3** + openapi-generator (`interfaceOnly`) | The spec is the source of truth: controllers implement the generated interfaces |
+| Design | Clean Architecture, Use Case, **Strategy** (search), **Policy** (eligibility), ports and adapters | Business rules independent of HTTP and storage |
+| Observability | Structured JSON logs (ECS) with a `requestId`, Actuator health/info/metrics | Correlate a request across front and back; no personal data in logs |
+| Web app | Angular 21: standalone components, **signals**, **Signal Forms**, zoneless, lazy routes, View Transitions | Modern, small, testable |
+| UI | Tailwind CSS 4 with the **Nocturne** design tokens, Phosphor icons, self-hosted Inter | A consistent dark design system, no CDN at runtime |
+| Charts | ApexCharts, lazy loaded, only with real flow data | Check-in windows, window progress, journey timeline |
+| Tests | Kotest + MockK + MockMvc (API); Vitest + TestBed (app) | Fast unit tests plus HTTP and component behaviour |
+| Delivery | Docker multi-stage images (non-root), nginx reverse proxy, GitHub Actions, Dependabot | One command to run everything, same origin so no CORS |
 
-The use case pattern maintains the same architectural guarantees (DIP, SRP, OCP) with less indirection.
-
----
-
-### Trade-offs: In-Memory vs Database
-
-| Aspect | In-Memory (current) | Database (production) |
-|---|---|---|
-| Setup | Zero infrastructure | PostgreSQL + Flyway migrations |
-| Persistence | Lost on restart | Durable |
-| Concurrency | `ConcurrentHashMap.putIfAbsent` (CAS) | DB transaction + unique constraint |
-| Integration tests | Instantaneous | Requires Testcontainers |
-| Swap effort | Change one `@Bean` in `ApplicationConfig` | Change one `@Bean` in `ApplicationConfig` |
-
-The port interfaces (`FlightRepository`, `PassengerRepository`, `CheckinRepository`) are the boundary. Swapping `InMemoryFlightRepository` for a JPA implementation requires changing **only** `ApplicationConfig` — no domain or use case code changes.
-
----
-
-### Trade-off: Event publication without Outbox
-
-The `PerformCheckinUseCaseImpl` publishes `CheckinCompletedEvent` **after** the repository save:
+## 🏗 Architecture
 
 ```
-saveIfAbsent(checkin) → true → publish(CheckinCompletedEvent)
+ Browser ──►  nginx (app container) ──┬──►  Angular SPA (static files, no-cache index, hashed assets)
+                                      │
+                                      └──►  /checkins · /demo · /actuator/health
+                                                       │
+                                                       ▼
+                                  Spring Boot API (Kotlin, virtual threads)
+                                                       │
+                                  api ► application ► domain ◄ infrastructure
+                                  (controllers)  (use cases,    (in-memory repositories,
+                                                  ports)         seed data, event logger)
 ```
 
-**Risk**: if `publish` throws after a successful save, the check-in record exists but the confirmation e-mail is never sent.
+- **Same origin.** The app container serves the SPA and reverse-proxies the API, so the browser never needs CORS. In development, `ng serve` does the same through `proxy.conf.js`.
+- **The API is the authority.** The app does not duplicate business rules: it asks, and renders `checkinAvailable`, `checkinOpensAt` and error `code`s.
+- **Per-feature modules in the app.** `check-in` (the journey) and `test-data` (demo scenarios), each with its routes and a `doc.md`; modules talk through small public APIs.
 
-**Mitigation for production**: implement the [Transactional Outbox Pattern](https://microservices.io/patterns/data/transactional-outbox.html) — persist the event in the same database transaction as the check-in, then use a relay (Debezium, polling) to publish it to the broker. The `EventPublisher` interface makes this change transparent to the use case.
+Deeper dives: [API architecture, patterns and concurrency](api-check-in-api-kotlin/README.md) · [app structure and rules](app-check-in-api-angular/README.md).
 
----
-
-### Boarding time rule
-
-Boarding time is set to `departureTime - 30 minutes`. This is a hardcoded business rule.  
-If it needs to vary per flight type or airline tier, extract it to a `BoardingTimePolicy` interface following the same pattern as `CheckinPolicy`.
-
----
-
-## Applied Patterns
-
-### Strategy — Flight Search
+## 🗂 Repository layout
 
 ```
-SearchFlightsUseCaseImpl
-    → FlightSearchStrategyResolver.resolve(searchType)
-        → FlightNumberSearchStrategy | BookingCodeSearchStrategy | DocumentSearchStrategy
+.
+├── api-check-in-api-kotlin/      Kotlin + Spring Boot API (own README, Dockerfile, OpenAPI spec)
+├── app-check-in-api-angular/     Angular web app (own README, Dockerfile, nginx config)
+├── docs/
+│   ├── frontend-integration-guide.md   Contract, flows, errors and test data for front-end work
+│   ├── api-audit-report.md             Audit findings, fixes and decisions
+│   ├── assets/                         Demo GIF
+│   └── MaiaFlight check-in prototype/  Visual prototype and the Nocturne design system
+├── .github/                      CI workflow and Dependabot
+└── docker-compose.yml            API + app, one command
 ```
 
-Each strategy implements one algorithm for locating flights. Adding a new `SearchType` requires only a new strategy class and a new `Map` entry in `ApplicationConfig` — existing strategies and the use case are untouched (**Open/Closed Principle**).
+## 🚀 Getting started
 
-### Policy — Check-in Eligibility
-
-```kotlin
-interface CheckinPolicy {
-    fun canCheckin(flight: Flight): Boolean
-}
-```
-
-`HoursBeforeDeparturePolicy` implements the 72-hour window and flight status checks. Changing the rule (e.g., to 48 hours) or adding a new rule (e.g., VIP passengers can check in 96 hours early) requires a new implementation — the use case never changes (**Open/Closed Principle**).
-
-### Use Case — Orchestration
-
-Each use case interface exposes a single `execute` method and is responsible for exactly one business operation. The controller and infrastructure code depend on interfaces, not on implementations (**Dependency Inversion Principle**).
-
----
-
-## Thread Safety & Concurrency
-
-### The TOCTOU problem
-
-A naive duplicate check implementation:
-```kotlin
-// UNSAFE — two threads can both pass this check
-if (!checkinRepository.exists(flightId, passengerId)) {
-    checkinRepository.save(checkin)  // both may reach this line
-}
-```
-
-Two concurrent requests for the same passenger/flight pair would both read "no duplicate" and both proceed to save, creating two check-in records.
-
-### The solution: atomic `saveIfAbsent`
-
-`InMemoryCheckinRepository` uses `ConcurrentHashMap.putIfAbsent`, which is a single atomic CAS (compare-and-swap) operation:
-
-```kotlin
-val existing = checkinByFlightAndPassenger.putIfAbsent(compositeKey, checkin)
-// null  → key was absent → record saved → return true
-// value → key existed   → duplicate   → return false
-```
-
-Because the entire check-then-insert is a single hardware-level atomic operation, exactly one of two racing threads will receive `null` (success) and the other will receive the existing entry (duplicate). No locks, no synchronised blocks, no contention — the approach scales naturally under virtual threads.
-
-In a database-backed implementation, the equivalent guarantee is provided by a `UNIQUE` constraint on `(flight_id, passenger_id)` combined with an `INSERT ... ON CONFLICT DO NOTHING` or a database transaction with a unique index violation caught as a `DataIntegrityViolationException`.
-
----
-
-## Observability
-
-### Structured logging
-
-Spring Boot 4 ships native ECS (Elastic Common Schema) structured logging. Configured in `application.yaml`:
-
-```yaml
-spring.logging.structured.format.console: ecs
-```
-
-All log statements follow the `action=<verb> field=value` pattern for easy filtering:
-
-```
-action=search_flights_start    searchType=FLIGHT_NUMBER  value=MF100
-action=strategy_resolved       strategy=FlightNumberSearchStrategy
-action=search_flights_completed totalFound=1  eligible=1
-
-action=perform_checkin_start   flightId=FL-001  passengerId=P-001
-action=checkin_policy_rejected flightId=FL-003  flightStatus=CANCELLED
-action=checkin_saved           checkinId=abc123  boardingGate=A1
-action=checkin_event_published checkinId=abc123  passengerEmail=joao@email.com
-```
-
-Filter examples for Kibana / Loki:
-- `action: "checkin_saved"` → all completed check-ins
-- `action: "checkin_policy_rejected"` → eligibility failures (monitor for spikes)
-- `action: "checkin_duplicate_rejected"` → concurrent duplicate attempts
-
-### Actuator endpoints
-
-| Endpoint | Description |
-|---|---|
-| `GET /actuator/health` | Application and component health status |
-| `GET /actuator/info` | Version, JVM, and build metadata |
-| `GET /actuator/metrics` | Micrometer metrics (JVM, threads, HTTP requests) |
-| `GET /actuator/mappings` | All registered HTTP routes |
-| `GET /actuator/loggers` | Read and change log levels at runtime |
-| `GET /actuator/env` | Active configuration properties |
-
-**Change log level without restarting:**
-```bash
-curl -X POST http://localhost:8080/actuator/loggers/com.dowglasmaia.checkinapi \
-  -H "Content-Type: application/json" \
-  -d '{"configuredLevel": "DEBUG"}'
-```
-
-**Add Prometheus scraping (future):**
-```xml
-<dependency>
-    <groupId>io.micrometer</groupId>
-    <artifactId>micrometer-registry-prometheus</artifactId>
-</dependency>
-```
-Enables `GET /actuator/prometheus` — scrape-ready for Prometheus + Grafana dashboards.
-
----
-
-## Virtual Threads (Project Loom)
-
-```yaml
-server:
-  tomcat:
-    threads:
-      virtual:
-        enabled: true
-```
-
-### Why virtual threads?
-
-| | Platform threads | Virtual threads |
-|---|---|---|
-| Managed by | Operating system | JVM |
-| Memory per thread | ~1 MB stack | ~1 KB heap |
-| Practical limit | Thousands | Millions |
-| Blocking I/O behaviour | OS thread blocked (idle) | Thread parked (unmounted), OS thread freed |
-
-The check-in flow performs sequential blocking calls: repository lookup → policy evaluation → repository save → event publish. With virtual threads:
-
-- Each request gets its own virtual thread.
-- While waiting for I/O, the virtual thread is parked and the underlying carrier thread is released for other work.
-- Far more concurrent requests can be served with the same hardware, without reactive programming or `async`/`await` refactoring.
-- Code remains sequential and readable.
-
-> **Spring Boot 4 guidance**: Virtual threads are the recommended approach for Spring MVC REST APIs on Java 21+. WebFlux/coroutines are preferred when the reactive model is required end-to-end (streaming, backpressure).
-
----
-
-## Testing
-
-Unit tests use **Kotest 5.9.1** (FunSpec / BehaviorSpec) and **MockK 1.13.12**.  
-No Spring context is loaded — classes are instantiated directly.
-
-```
-src/test/kotlin/
-├── domain/policy/
-│   └── HoursBeforeDeparturePolicyTest     BehaviorSpec   7 scenarios
-├── domain/strategy/
-│   └── FlightSearchStrategyTest           FunSpec        6 scenarios
-└── application/usecase/
-    ├── SearchFlightsUseCaseTest           FunSpec        8 scenarios
-    └── PerformCheckinUseCaseTest          FunSpec        9 scenarios
-```
-
-**Test isolation:** every test class uses `beforeTest { clearMocks(...) }` to reset MockK expectations before each test, preventing expectation bleed between test cases.
+### Everything with Docker
 
 ```bash
-# Run all tests
-./mvnw test
-
-# Run a specific spec
-./mvnw test -Dtest=HoursBeforeDeparturePolicyTest
-
-# Run with verbose output
-./mvnw test -Dsurefire.useFile=false
+docker compose up --build
 ```
 
----
+Open <http://localhost:4200> (`APP_PORT` changes the port). The API is not published to the host; the app container reaches it on the internal network.
 
-## Running Locally
+### Local development
 
-**Prerequisites:** Java 21+
+Requirements: **JDK 24+** and **Node 24+**.
 
 ```bash
-# Generate OpenAPI code + compile + run tests
-./mvnw clean test
+# terminal 1: API on http://localhost:8080
+cd api-check-in-api-kotlin && ./mvnw spring-boot:run
 
-# Start the application
-./mvnw spring-boot:run
+# terminal 2: app on http://localhost:4200 (proxies to the API through proxy.conf.js)
+cd app-check-in-api-angular && npm ci && npm start
 ```
 
-The API is available at `http://localhost:8080`.
+If the API runs elsewhere: `API_URL=http://localhost:18080 npm start`.
 
-### Example requests
+### Useful configuration
 
-```bash
-# Search by flight number
-curl -X POST http://localhost:8080/checkins/flights/search \
-  -H "Content-Type: application/json" \
-  -d '{"searchType": "FLIGHT_NUMBER", "value": "MF100"}'
-
-# Search by document (CPF)
-curl -X POST http://localhost:8080/checkins/flights/search \
-  -H "Content-Type: application/json" \
-  -d '{"searchType": "DOCUMENT", "value": "123.456.789-00"}'
-
-# Perform check-in
-curl -X POST http://localhost:8080/checkins \
-  -H "Content-Type: application/json" \
-  -d '{"flightId": "FL-001", "passengerId": "P-001"}'
-
-# Health check
-curl http://localhost:8080/actuator/health
-```
-
-**Sample data available in local mode:**
-
-| Passenger ID | Document | Flights |
+| Variable | Where | Effect |
 |---|---|---|
-| P-001 | 123.456.789-00 | FL-001 (MF100, GRU→JFK, +24h), FL-002 (MF200, CGH→LHR, +48h) |
-| P-002 | 987.654.321-00 | FL-001 |
-| P-003 | 111.222.333-44 | FL-003 (MF300, GIG→MIA, +100h — outside 72h window) |
+| `APP_DEMO_ENABLED` | API | `false` removes `GET /demo/test-data` and `POST /demo/reset` (default `true`) |
+| `CORS_ALLOWED_ORIGINS` | API | Browser origins allowed; empty keeps CORS off (not needed with the proxy) |
+| `LOG_FORMAT` / `LOG_LEVEL` | API | Log format (`ecs` JSON by default) and level |
+| `API_UPSTREAM` / `API_BASE_URL` | App container | nginx upstream and the runtime `apiBaseUrl` served in `/config.json` |
+| `API_URL` | `npm start` | Target of the dev-server proxy |
 
----
+## 🧪 Trying the flow
 
-## Sequence Diagrams (UML)
+The API ships **fictitious** data and lists ready-made scenarios at `GET /demo/test-data`; the app shows them on the **Test data** page.
 
-### `POST /checkins/flights/search`
-![search.png](src/main/resources/img/search.png)
+| Search | Value | Result |
+|---|---|---|
+| Flight number | `MF214` | 1 flight, check-in open |
+| Booking code | `MAIA7K` | 3 flights: open, not open yet, cancelled |
+| Document | `123.456.789-09` | 3 flights; the passenger is identified automatically |
 
----
+On a flight found by booking code or flight number, the confirm panel lists the flight's fictitious passengers and pre-fills the first one, so the whole flow can be completed without knowing the data.
 
-### `POST /checkins`
-![perform.png](src/main/resources/img/perform.png)
+The API keeps check-ins **in memory**, so the same passenger cannot check in twice on the same flight. To repeat the flow use **Reset test data** (Test data page, or the "already checked in" screen), which calls `POST /demo/reset`; restarting the API also works. Never type real personal data while testing.
 
----
+## 🔌 The API at a glance
 
-## Project Structure
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/checkins/flights/search` | Find flights by flight number, booking code or document. Returns flights that have not departed, each with `checkinAvailable`, `status`, `checkinOpensAt`; `passengerId` for document searches |
+| `POST` | `/checkins` | Check a passenger in; `201` with gate, boarding time and confirmation id |
+| `GET` | `/demo/test-data` | Fictitious scenarios and passengers (can be disabled) |
+| `POST` | `/demo/reset` | Forget every check-in (can be disabled) |
+| `GET` | `/actuator/health` | Liveness and readiness |
 
-```
-src/main/kotlin/com/dowglasmaia/checkinapi/
-├── api/
-│   ├── controller/    CheckinController
-│   └── exception/     DomainExceptions · GlobalExceptionHandler
-├── application/
-│   ├── port/          FlightRepository · PassengerRepository
-│   │                  CheckinRepository · EventPublisher
-│   └── usecase/
-│       ├── input/     SearchFlightsInput · PerformCheckinInput
-│       ├── impl/      SearchFlightsUseCaseImpl · PerformCheckinUseCaseImpl
-│       SearchFlightsUseCase · PerformCheckinUseCase  (interfaces)
-├── config/            ApplicationConfig
-├── domain/
-│   ├── event/         CheckinCompletedEvent
-│   ├── model/         Flight · Passenger · Checkin · FlightStatus · SearchType
-│   ├── policy/        CheckinPolicy · HoursBeforeDeparturePolicy
-│   └── strategy/      FlightSearchStrategy · FlightSearchStrategyResolver
-│                      FlightNumberSearchStrategy · BookingCodeSearchStrategy
-│                      DocumentSearchStrategy
-└── infrastructure/
-    ├── messaging/     LoggingEventPublisher
-    └── repository/    InMemoryFlightRepository · InMemoryPassengerRepository
-                       InMemoryCheckinRepository
-```
+Errors share one body, `{ status, error, message, code }`, with codes such as `FLIGHT_NOT_FOUND`, `PASSENGER_NOT_ON_FLIGHT`, `CHECKIN_NOT_ALLOWED` and `CHECKIN_ALREADY_DONE`. Full contract: [OpenAPI spec](api-check-in-api-kotlin/src/main/resources/openapi/check-in-api.yaml) and the [integration guide](docs/frontend-integration-guide.md).
+
+## 🖥 The web app at a glance
+
+- **Journey:** search → flights → details/confirm → boarding pass, with a progress stepper, skeleton loading, view transitions and a screen for each error case.
+- **Design system:** Nocturne tokens in Tailwind 4, outlined buttons, focus rings, responsive from phone to desktop, `prefers-reduced-motion` respected.
+- **Charts, only where there is data:** check-in windows per flight, a window-progress ring with a live `d HH:MM:SS` countdown, and the check-in → boarding → departure timeline.
+- **Privacy by design:** nothing is written to `localStorage`/`sessionStorage`; a typed document goes to the API and is kept only as a masked label (`•••.456.789-••`) in memory. No personal data in logs.
+- **Accessibility:** skip link, labelled landmarks, `aria-live` status updates, keyboard-friendly dialogs and controls.
+- **Security headers:** the nginx image sends a strict CSP (`default-src 'self'`), `X-Frame-Options`, `nosniff` and a no-referrer policy.
+
+## ✅ Quality
+
+At the time of writing: **72 backend tests** and **230 frontend tests**, all passing.
+
+| Project | Commands |
+|---|---|
+| API | `./mvnw -B verify` (generates the OpenAPI interfaces, compiles, runs the tests) |
+| App | `npm run format:check` · `npm test` · `npm run build` · `npm audit --omit=dev --audit-level=high` |
+| Both | Dependency review on pull requests, Docker image builds, weekly Dependabot |
+
+The workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs only the job of the project whose folder changed, with Maven, npm and Docker layer caching, and also checks that the production `index.html` has no inline event handlers (the CSP would block them).
+
+Highlights of what the tests cover: the 72-hour boundaries with a fixed clock, 32 concurrent check-ins for the same passenger (exactly one wins), every HTTP error and its `code`, personal data never reaching logs or storage, and each screen of the journey including the unavailable and already-checked-in cases.
+
+## 🤖 Built with an AI assistant
+
+This project was developed with **[Claude Code](https://claude.com/claude-code)**, Anthropic's command-line AI coding assistant, working as a pair programmer under the direction and review of the author. The assistant did the heavy lifting; the decisions, scope and acceptance were human.
+
+| Phase | What the assistant helped with |
+|---|---|
+| **Audit** | Read the whole API, found real defects (any passenger could check in on any flight, inactive validation, exposed Actuator endpoints, personal data in logs, an off-by-hours check-in window, timezone mislabeling) and fixed them with regression tests |
+| **Infrastructure** | Structured JSON logging with request correlation, Dockerfiles, nginx reverse proxy and CSP, CI with path filters, Dependabot |
+| **Contract and docs** | Evolved the OpenAPI spec compatibly, wrote the audit report and the front-end integration guide from behaviour confirmed in code and in running requests |
+| **Front end** | Analysed the visual prototype, mapped its gaps against the API, then built the Angular app with the Nocturne design system, charts and tests |
+| **Verification** | Ran builds and tests, drove the real app in a browser (desktop and mobile), reproduced reported bugs before fixing them, and rebuilt the Docker stack |
+
+How the work was steered:
+
+- **Plan first.** Larger changes started in plan mode: explore, compare options, agree on the approach, only then implement.
+- **Skills and conventions.** The Angular work followed the Angular developer skill (standalone components, signals, Signal Forms, Vitest) and a module-per-feature structure.
+- **Evidence over claims.** Nothing counts as done until the build, the tests and a real run say so; failures, skipped checks and trade-offs are reported rather than hidden.
+- **Reported bugs are reproduced first.** For example, the "second check-in gets stuck" problem was reproduced in the browser and traced to the API's in-memory check-ins and the app forgetting them, then fixed on both sides.
+
+AI assistance does not replace review: treat this repository as a worked example of AI-assisted engineering, not as unreviewed generated code.
+
+## 🧩 Decisions and known limits
+
+| Topic | Decision or limit |
+|---|---|
+| Persistence | **In memory on purpose**: a portfolio prototype that runs with one command and deterministic seed data. The repository ports isolate storage, so PostgreSQL (unique `(flight_id, passenger_id)`, Flyway) can be added behind them without touching the use cases |
+| Authentication | **None yet.** Identifiers are guessable and endpoints are anonymous; this is the main gap before real use (JWT/OIDC and ownership checks are the next step) |
+| Time | The API works in UTC; the app shows times in the device's time zone, because the API does not send the airport's zone |
+| Events | The "check-in completed" event is only logged, with the e-mail masked. A real broker would call for the outbox pattern |
+| Boarding pass | A visual preview: no PDF or QR code yet |
+| Boarding time | Fixed at 30 minutes before departure; can fall in the past if the check-in is made late |
+| Searching by document | The API matches the exact format; the app adds the usual CPF mask when 11 digits are typed |
+
+More in the [audit report](docs/api-audit-report.md) and the pending items at the end of the [integration guide](docs/frontend-integration-guide.md).
+
+## 📖 Documentation
+
+| Document | What it covers |
+|---|---|
+| [`api-check-in-api-kotlin/README.md`](api-check-in-api-kotlin/README.md) | API architecture, layers, patterns, concurrency, observability, tests |
+| [`app-check-in-api-angular/README.md`](app-check-in-api-angular/README.md) | App scripts, structure, configuration, privacy |
+| [`features/check-in/doc.md`](app-check-in-api-angular/src/app/features/check-in/doc.md) · [`features/test-data/doc.md`](app-check-in-api-angular/src/app/features/test-data/doc.md) | Responsibility, routes, rules and dependencies of each app module |
+| [`docs/frontend-integration-guide.md`](docs/frontend-integration-guide.md) | Endpoints, DTOs, errors, flows, test data and open questions |
+| [`docs/api-audit-report.md`](docs/api-audit-report.md) | Findings by priority, fixes, contract changes, persistence decision |
+| [`check-in-api.yaml`](api-check-in-api-kotlin/src/main/resources/openapi/check-in-api.yaml) | The OpenAPI contract |
+| [`CLAUDE.md`](CLAUDE.md) | Context and conventions for AI assistants working in this repository |
+| [`docs/MaiaFlight check-in prototype`](docs/MaiaFlight%20check-in%20prototype) | The visual prototype and the Nocturne design system |
+
+## 👨‍💻 Author
+
+**Dowglas Maia** — Senior Java Engineer
+
+[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0A66C2?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/dowglasmaia/)
+[![GitHub](https://img.shields.io/badge/-GitHub-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/dowglasmaia)
+[![Malt](https://img.shields.io/badge/-Malt-FC5757?style=flat-square)](https://www.malt.com/profile/dowglasmaia)

@@ -1,0 +1,60 @@
+server:
+  port: 8080
+  shutdown: graceful
+  # Virtual Threads (Project Loom): each HTTP request runs on a lightweight virtual thread.
+  tomcat:
+    threads:
+      virtual:
+        enabled: true
+
+spring:
+  application:
+    name: check-in-api
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+# Structured logging: Spring Boot ships native JSON formats. `logging.structured.*` is a
+# top-level property (it was previously nested under `spring:` and silently ignored).
+# ECS includes MDC entries, so the `requestId` set by RequestIdFilter is emitted on every line.
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}   # set LOG_FORMAT= (empty) for plain text in local dev
+  level:
+    root: INFO
+    com.dowglasmaia.checkinapi: ${LOG_LEVEL:INFO}
+
+management:
+  endpoints:
+    web:
+      # Only what is needed to operate the service. `env`, `loggers` and `mappings` were
+      # removed: they leak configuration and `loggers` allows changing log levels at runtime.
+      exposure:
+        include: health, info, metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  info:
+    java:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  demo:
+    # Serves GET /demo/test-data (fictitious scenarios). Set APP_DEMO_ENABLED=false to remove it.
+    enabled: ${APP_DEMO_ENABLED:true}
+  cors:
+    # Comma-separated list of allowed browser origins (e.g. http://localhost:4200).
+    # Empty (default) = CORS disabled.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+info:
+  app:
+    name: MaiaFlight Check-in API
+    description: Digital check-in service for MaiaFlight passengers
+    version: 0.0.1-SNAPSHOT
