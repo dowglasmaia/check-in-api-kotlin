@@ -1,0 +1,101 @@
+<div class="animate-rise">
+  <button mfBtn variant="ghost" class="-ml-2 px-2 py-1 text-[13px]" (click)="back()">
+    <i mfIcon="arrow-left"></i>Back to flights
+  </button>
+
+  <div class="mt-2.5 grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
+    <div class="flex min-w-0 flex-col gap-5">
+      @if (blocked(); as reason) {
+        <mf-alert [tone]="reason.tone" [heading]="reason.title">
+          {{ reason.body }}
+          <ul class="mt-2 flex flex-col gap-1">
+            @for (tip of reason.tips; track tip) {
+              <li class="flex gap-2 text-[13px] text-neutral-300">
+                <i mfIcon="arrow-bend-down-right" class="mt-0.5 shrink-0 text-accent-300"></i
+                >{{ tip }}
+              </li>
+            }
+          </ul>
+        </mf-alert>
+      }
+
+      <mf-card
+        elevation="md"
+        class="flex flex-col gap-5 bg-[radial-gradient(80%_120%_at_100%_0%,color-mix(in_srgb,var(--color-accent)_16%,transparent),transparent_60%)] p-4 sm:p-5"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2.5">
+          <span
+            class="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-xs text-accent-200"
+          >
+            <i mfIcon="airplane"></i>{{ flight().displayNumber }}
+          </span>
+          <span class="text-[13px] text-neutral-300">{{
+            flight().departureTime | flightTime: 'date'
+          }}</span>
+        </div>
+
+        <div class="flex items-center gap-3 sm:gap-5">
+          <div>
+            <p class="text-5xl font-medium leading-none tracking-tighter sm:text-6xl">
+              {{ flight().origin }}
+            </p>
+            <p class="mt-1.5 text-[13px] text-neutral-300">{{ origin() }}</p>
+          </div>
+          <div class="relative h-7.5 min-w-10 flex-1" aria-hidden="true">
+            <svg viewBox="0 0 200 30" preserveAspectRatio="none" class="absolute inset-0 size-full">
+              <path
+                d="M0 26 Q100 -14 200 26"
+                fill="none"
+                stroke="var(--color-accent)"
+                stroke-width="1.5"
+                stroke-dasharray="3 6"
+                vector-effect="non-scaling-stroke"
+                class="animate-dash"
+              />
+            </svg>
+            <i
+              mfIcon="airplane-tilt"
+              fill
+              class="absolute left-1/2 -top-0.5 -translate-x-1/2 rotate-90 text-xl text-accent-200"
+            ></i>
+          </div>
+          <div class="text-right">
+            <p class="text-5xl font-medium leading-none tracking-tighter sm:text-6xl">
+              {{ flight().destination }}
+            </p>
+            <p class="mt-1.5 text-[13px] text-neutral-300">{{ destination() }}</p>
+          </div>
+        </div>
+
+        <app-info-grid [items]="info()" />
+      </mf-card>
+
+      @if (showWindow()) {
+        <mf-card class="p-4 sm:p-5">
+          <h2 class="mb-2 text-xs uppercase tracking-widest text-neutral-400">Check-in window</h2>
+          @defer (on viewport; prefetch on idle) {
+            <app-window-progress-chart [flight]="flight()" />
+          } @placeholder {
+            <mf-skeleton class="mx-auto h-60 w-60 rounded-full" />
+          }
+        </mf-card>
+      }
+
+      <mf-card class="p-4 sm:p-5">
+        <h2 class="mb-4 text-xs uppercase tracking-widest text-neutral-400">Your journey</h2>
+        <app-journey-timeline [steps]="journey()" />
+      </mf-card>
+    </div>
+
+    <app-confirm-panel
+      class="lg:sticky lg:top-4"
+      [flight]="flight()"
+      [passengerKnown]="!!store.passengerId()"
+      [suggestions]="passengerSuggestions()"
+      [submitting]="store.confirming()"
+      [unavailable]="!!blocked()"
+      (back)="back()"
+      (confirm)="confirm($event)"
+    />
+  </div>
+</div>
