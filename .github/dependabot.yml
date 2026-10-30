@@ -1,25 +1,64 @@
 version: 2
+
+# Monthly, grouped, and limited to patch/minor bumps of the pieces that must move together.
+# Major upgrades of the stack (Angular, TypeScript, Spring Boot, Kotlin, Node…) are done on purpose, not by a bot.
 updates:
   - package-ecosystem: maven
     directory: /api-check-in-api-kotlin
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      maven-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: org.springframework.boot:*
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: org.jetbrains.kotlin:*
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: org.apache.maven:apache-maven
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
   - package-ecosystem: npm
     directory: /app-check-in-api-angular
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 3
     groups:
       angular:
-        patterns: ['@angular/*']
+        patterns: ['@angular/*', '@angular-devkit/*']
+        update-types: [minor, patch]
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
   - package-ecosystem: docker
     directory: /api-check-in-api-kotlin
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: eclipse-temurin
+        update-types: [version-update:semver-major]
+
   - package-ecosystem: docker
     directory: /app-check-in-api-angular
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ['*']
