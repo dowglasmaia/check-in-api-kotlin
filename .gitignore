@@ -37,3 +37,4 @@ node_modules/
 .angular/
 api-check-in-api-kotlin/target/
 .claude/
+docs/assets/*.recording.gif

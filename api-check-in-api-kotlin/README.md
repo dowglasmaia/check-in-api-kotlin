@@ -1,7 +1,7 @@
 # ✈️ MaiaFlight — Check-in API
 
-Digital passenger check-in backend for MaiaFlight.  
-**Stack:** Kotlin · Spring Boot 4 · Spring MVC · Virtual Threads (Project Loom)  
+Digital passenger check-in backend for MaiaFlight, part of the [MaiaFlight Check-in monorepo](../README.md) (the Angular app lives in [`app-check-in-api-angular`](../app-check-in-api-angular)).  
+**Stack:** Kotlin 2.2 · Spring Boot 4 · Spring MVC · Virtual Threads (Project Loom) · OpenAPI contract-first  
 **Architecture:** Clean Architecture · Use Case pattern · Strategy pattern · SOLID
 
 ---
@@ -25,7 +25,7 @@ Digital passenger check-in backend for MaiaFlight.
 
 ## Overview
 
-Passengers check in up to **72 hours** before departure by locating their booking through one of three strategies:
+Passengers check in from **72 hours** before departure until departure, locating their booking through one of three strategies:
 
 | Search type | Example value |
 |---|---|
@@ -89,8 +89,10 @@ After a successful check-in, a domain event is published so downstream services 
 | Class | Responsibility |
 |---|---|
 | `CheckinController` | Accept requests, map to input objects, delegate to use cases, map results to response models. Contains **no business logic**. |
-| `GlobalExceptionHandler` | Translate domain exceptions into standardised HTTP status codes and error bodies. |
-| `DomainExceptions` | Typed exception hierarchy: `FlightNotFoundException`, `PassengerNotFoundException`, `CheckinNotAllowedException`, `CheckinAlreadyExistsException`. |
+| `DemoDataController` | Serves the fictitious demo scenarios and the demo reset; disabled with `app.demo.enabled=false`. |
+| `GlobalExceptionHandler` | Translate domain and framework exceptions into one error body `{ status, error, message, code }`, never leaking internals. |
+| `DomainExceptions` | Typed hierarchy, each with a stable `code`: `FlightNotFoundException`, `PassengerNotFoundException`, `PassengerNotOnFlightException`, `CheckinNotAllowedException`, `CheckinAlreadyExistsException`. |
+| `RequestIdFilter` | Correlates each request: reads or generates `X-Request-Id`, puts it in the log context and echoes it. |
 
 ### `application/` — Use Case Orchestration
 
@@ -98,8 +100,8 @@ After a successful check-in, a domain event is published so downstream services 
 |---|---|
 | `SearchFlightsUseCase` | Interface declaring the flight-search contract. |
 | `PerformCheckinUseCase` | Interface declaring the check-in contract. |
-| `SearchFlightsUseCaseImpl` | Validates input → resolves strategy → searches → filters by policy. |
-| `PerformCheckinUseCaseImpl` | Loads resources → applies policy → atomic save → publishes event. |
+| `SearchFlightsUseCaseImpl` | Validates input → resolves strategy → searches → drops departed flights → flags each one with the policy (`checkinAvailable`, `checkinOpensAt`). |
+| `PerformCheckinUseCaseImpl` | Loads resources → checks the passenger is on the flight → applies policy → atomic save → publishes the event (best effort). |
 | `SearchFlightsInput` / `PerformCheckinInput` | Immutable value objects carrying use case input data. |
 | `port/*` | Output port interfaces (repositories, event publisher) — the domain never imports infrastructure. |
 
@@ -109,12 +111,12 @@ After a successful check-in, a domain event is published so downstream services 
 |---|---|
 | `Flight`, `Passenger`, `Checkin` | Immutable domain entities modelled as `data class`. |
 | `FlightStatus`, `SearchType` | Type-safe enums preventing stringly-typed bugs. |
-| `CheckinPolicy` | Interface: is a flight eligible for check-in right now? |
-| `HoursBeforeDeparturePolicy` | Implements the 72-hour window rule and status guard. |
+| `CheckinPolicy` | Interface: is check-in open for a flight right now, and when does it open? |
+| `HoursBeforeDeparturePolicy` | Implements the 72-hour window (compared exactly, not in truncated hours) and the status guard, on an injected `Clock`. |
 | `FlightSearchStrategy` | Interface: find flights by a given search criterion. |
 | `FlightNumberSearchStrategy` | Finds flights by exact flight number. |
 | `BookingCodeSearchStrategy` | Finds flights by booking code (PNR locator). |
-| `DocumentSearchStrategy` | Finds flights by passenger CPF/passport via `PassengerRepository`. |
+| `DocumentSearchStrategy` | Finds flights by passenger CPF/passport via `PassengerRepository` and also returns the passenger. |
 | `FlightSearchStrategyResolver` | Resolves the correct strategy from `SearchType` at runtime. |
 | `CheckinCompletedEvent` | Immutable domain event carrying email and flight ID for downstream consumers. |
 
@@ -122,8 +124,9 @@ After a successful check-in, a domain event is published so downstream services 
 
 | Class | Responsibility |
 |---|---|
-| `InMemoryFlightRepository` | Thread-safe in-memory flight store (read-only; pre-loaded sample data). |
-| `InMemoryPassengerRepository` | Thread-safe in-memory passenger store (read-only; pre-loaded sample data). |
+| `InMemoryFlightRepository` | Read-only in-memory flight store fed by `DemoSeed` (departure times are offsets from the current hour). |
+| `InMemoryPassengerRepository` | Read-only in-memory passenger store fed by `DemoSeed`. |
+| `DemoSeed` | Fictitious flights, passengers and the test scenarios, kept together so they cannot drift apart. |
 | `InMemoryCheckinRepository` | `ConcurrentHashMap`-backed store; `saveIfAbsent` is atomic (see [Thread Safety](#thread-safety--concurrency)). |
 | `LoggingEventPublisher` | Publishes events to SLF4J logs. Replace with `KafkaEventPublisher` for production. |
 
@@ -135,33 +138,35 @@ Full contract: [`src/main/resources/openapi/check-in-api.yaml`](src/main/resourc
 
 ### `POST /checkins/flights/search`
 
-Searches for flights available for check-in.
+Finds the flights that **have not departed yet** for a flight number, booking code or document. Every flight says whether check-in is available, so flights whose check-in is not open yet, cancelled or closed are listed too.
 
 **Request body**
 ```json
-{
-  "searchType": "FLIGHT_NUMBER",
-  "value": "MF100"
-}
+{ "searchType": "FLIGHT_NUMBER", "value": "MF214" }
 ```
 
-`searchType` values: `FLIGHT_NUMBER` | `BOOKING_CODE` | `DOCUMENT`
+`searchType`: `FLIGHT_NUMBER` | `BOOKING_CODE` | `DOCUMENT`. `value` is 1–64 characters, trimmed; flight number and booking code ignore case.
 
 **Response `200 OK`**
 ```json
 {
   "flights": [
     {
-      "flightId": "FL-001",
-      "flightNumber": "MF100",
+      "flightId": "FL-004",
+      "flightNumber": "MF214",
       "origin": "GRU",
-      "destination": "JFK",
-      "departureTime": "2026-04-04T14:00:00Z",
-      "checkinAvailable": true
+      "destination": "LIS",
+      "departureTime": "2026-10-31T12:40:00Z",
+      "status": "SCHEDULED",
+      "checkinAvailable": true,
+      "checkinOpensAt": "2026-10-28T12:40:00Z"
     }
-  ]
+  ],
+  "passengerId": "P-004"
 }
 ```
+
+`passengerId` is present only for `DOCUMENT` searches, where the search identifies the passenger. An empty `flights` list is a `200`, never a `404`.
 
 ---
 
@@ -171,10 +176,7 @@ Performs a passenger check-in.
 
 **Request body**
 ```json
-{
-  "flightId": "FL-001",
-  "passengerId": "P-001"
-}
+{ "flightId": "FL-004", "passengerId": "P-004" }
 ```
 
 **Response `201 Created`**
@@ -183,17 +185,34 @@ Performs a passenger check-in.
   "checkinId": "550e8400-e29b-41d4-a716-446655440000",
   "status": "CONFIRMED",
   "boardingGate": "A1",
-  "boardingTime": "2026-04-04T13:30:00Z"
+  "boardingTime": "2026-10-31T12:10:00Z"
 }
 ```
 
-**Error responses**
+Checks run in this order: flight exists → passenger exists → passenger is booked on the flight → check-in window and flight status → no previous check-in.
 
-| HTTP status | Trigger |
+**Error responses** — every error has the body `{ status, error, message, code }`; clients should branch on `code`, never on `message`.
+
+| HTTP status | `code` | Trigger |
+|---|---|---|
+| `400` | `VALIDATION_ERROR` / `MALFORMED_REQUEST` | Missing or blank fields, unknown `searchType`, malformed JSON |
+| `404` | `FLIGHT_NOT_FOUND` | Unknown flight |
+| `404` | `PASSENGER_NOT_FOUND` | Unknown passenger |
+| `404` | `PASSENGER_NOT_ON_FLIGHT` | Passenger exists but is not booked on that flight |
+| `409` | `CHECKIN_NOT_ALLOWED` | Outside the 72-hour window, or flight cancelled/boarded/closed |
+| `409` | `CHECKIN_ALREADY_DONE` | Duplicate check-in |
+| `500` | `INTERNAL_ERROR` | Unexpected error (no internals are leaked) |
+
+---
+
+### Demo endpoints
+
+Both answer `404` when the API runs with `APP_DEMO_ENABLED=false`.
+
+| Endpoint | Purpose |
 |---|---|
-| `400 Bad Request` | Search value is blank |
-| `404 Not Found` | Flight or passenger does not exist |
-| `409 Conflict` | Check-in window closed, flight cancelled, or duplicate check-in |
+| `GET /demo/test-data` | Fictitious scenarios generated from the seed data, plus the passengers of each flight |
+| `POST /demo/reset` (`204`) | Forgets every check-in so the demo flow can be repeated |
 
 ---
 
@@ -270,7 +289,7 @@ The `PerformCheckinUseCaseImpl` publishes `CheckinCompletedEvent` **after** the 
 saveIfAbsent(checkin) → true → publish(CheckinCompletedEvent)
 ```
 
-**Risk**: if `publish` throws after a successful save, the check-in record exists but the confirmation e-mail is never sent.
+**Risk**: if `publish` throws after a successful save, the check-in record exists but the confirmation e-mail is never sent. The use case catches and logs the failure instead of returning a 500, because a client retry would only receive a misleading `409`.
 
 **Mitigation for production**: implement the [Transactional Outbox Pattern](https://microservices.io/patterns/data/transactional-outbox.html) — persist the event in the same database transaction as the check-in, then use a relay (Debezium, polling) to publish it to the broker. The `EventPublisher` interface makes this change transparent to the use case.
 
@@ -278,7 +297,7 @@ saveIfAbsent(checkin) → true → publish(CheckinCompletedEvent)
 
 ### Boarding time rule
 
-Boarding time is set to `departureTime - 30 minutes`. This is a hardcoded business rule.  
+Boarding time is set to `departureTime - 30 minutes`. This is a hardcoded business rule and it can fall in the past when the check-in is made less than 30 minutes before departure.  
 If it needs to vary per flight type or airline tier, extract it to a `BoardingTimePolicy` interface following the same pattern as `CheckinPolicy`.
 
 ---
@@ -300,10 +319,11 @@ Each strategy implements one algorithm for locating flights. Adding a new `Searc
 ```kotlin
 interface CheckinPolicy {
     fun canCheckin(flight: Flight): Boolean
+    fun checkinOpensAt(flight: Flight): LocalDateTime
 }
 ```
 
-`HoursBeforeDeparturePolicy` implements the 72-hour window and flight status checks. Changing the rule (e.g., to 48 hours) or adding a new rule (e.g., VIP passengers can check in 96 hours early) requires a new implementation — the use case never changes (**Open/Closed Principle**).
+`HoursBeforeDeparturePolicy` implements the 72-hour window and flight status checks, and tells when the window opens (`checkinOpensAt`). Changing the rule (e.g., to 48 hours) or adding a new rule (e.g., VIP passengers can check in 96 hours early) requires a new implementation — the use case never changes (**Open/Closed Principle**).
 
 ### Use Case — Orchestration
 
@@ -345,23 +365,27 @@ In a database-backed implementation, the equivalent guarantee is provided by a `
 
 ### Structured logging
 
-Spring Boot 4 ships native ECS (Elastic Common Schema) structured logging. Configured in `application.yaml`:
+Spring Boot 4 ships native ECS (Elastic Common Schema) structured logging. Configured in `application.yaml`
+(top-level `logging.structured.format.console`; override with env `LOG_FORMAT`, log level with `LOG_LEVEL`):
 
 ```yaml
-spring.logging.structured.format.console: ecs
+logging.structured.format.console: ecs
 ```
 
-All log statements follow the `action=<verb> field=value` pattern for easy filtering:
+Every request gets a `requestId` (the caller's `X-Request-Id` when it is a safe token, otherwise a UUID).
+It is echoed in the `X-Request-Id` response header and emitted on every JSON log line.
+
+All log statements follow the `action=<verb> field=value` pattern for easy filtering. Personal data is never
+logged (search values, e-mail addresses are omitted or masked):
 
 ```
-action=search_flights_start    searchType=FLIGHT_NUMBER  value=MF100
-action=strategy_resolved       strategy=FlightNumberSearchStrategy
-action=search_flights_completed totalFound=1  eligible=1
+action=search_flights_start    searchType=FLIGHT_NUMBER  valueLength=5
+action=search_flights_completed searchType=FLIGHT_NUMBER  found=1  checkinAvailable=1
 
 action=perform_checkin_start   flightId=FL-001  passengerId=P-001
-action=checkin_policy_rejected flightId=FL-003  flightStatus=CANCELLED
+action=checkin_policy_rejected flightId=FL-006  status=CANCELLED
 action=checkin_saved           checkinId=abc123  boardingGate=A1
-action=checkin_event_published checkinId=abc123  passengerEmail=joao@email.com
+action=checkin_event_published checkinId=abc123
 ```
 
 Filter examples for Kibana / Loki:
@@ -371,21 +395,13 @@ Filter examples for Kibana / Loki:
 
 ### Actuator endpoints
 
+Only the endpoints below are exposed (`env`, `loggers` and `mappings` were removed for security).
+
 | Endpoint | Description |
 |---|---|
-| `GET /actuator/health` | Application and component health status |
-| `GET /actuator/info` | Version, JVM, and build metadata |
+| `GET /actuator/health` | Application health (plus `/health/liveness` and `/health/readiness`) |
+| `GET /actuator/info` | Version and JVM metadata |
 | `GET /actuator/metrics` | Micrometer metrics (JVM, threads, HTTP requests) |
-| `GET /actuator/mappings` | All registered HTTP routes |
-| `GET /actuator/loggers` | Read and change log levels at runtime |
-| `GET /actuator/env` | Active configuration properties |
-
-**Change log level without restarting:**
-```bash
-curl -X POST http://localhost:8080/actuator/loggers/com.dowglasmaia.checkinapi \
-  -H "Content-Type: application/json" \
-  -d '{"configuredLevel": "DEBUG"}'
-```
 
 **Add Prometheus scraping (future):**
 ```xml
@@ -424,48 +440,50 @@ The check-in flow performs sequential blocking calls: repository lookup → poli
 - Far more concurrent requests can be served with the same hardware, without reactive programming or `async`/`await` refactoring.
 - Code remains sequential and readable.
 
-> **Spring Boot 4 guidance**: Virtual threads are the recommended approach for Spring MVC REST APIs on Java 21+. WebFlux/coroutines are preferred when the reactive model is required end-to-end (streaming, backpressure).
+> **Spring Boot 4 guidance**: Virtual threads are the recommended approach for Spring MVC REST APIs on Java 21+ (this project targets Java 24). WebFlux/coroutines are preferred when the reactive model is required end-to-end (streaming, backpressure).
 
 ---
 
 ## Testing
 
-Unit tests use **Kotest 5.9.1** (FunSpec / BehaviorSpec) and **MockK 1.13.12**.  
-No Spring context is loaded — classes are instantiated directly.
+Unit tests use **Kotest 5.9.1** (FunSpec / BehaviorSpec) and **MockK 1.13.12**; the HTTP contract is covered with **MockMvc** on a full Spring context. At the time of writing there are **72 tests**, all passing.
 
 ```
 src/test/kotlin/
-├── domain/policy/
-│   └── HoursBeforeDeparturePolicyTest     BehaviorSpec   7 scenarios
-├── domain/strategy/
-│   └── FlightSearchStrategyTest           FunSpec        6 scenarios
-└── application/usecase/
-    ├── SearchFlightsUseCaseTest           FunSpec        8 scenarios
-    └── PerformCheckinUseCaseTest          FunSpec        9 scenarios
+├── api/
+│   ├── CheckinApiIntegrationTest          MockMvc  every endpoint, status and error code, request id, actuator
+│   └── DemoDisabledIntegrationTest        MockMvc  demo endpoints answer 404 when disabled
+├── application/usecase/
+│   ├── SearchFlightsUseCaseTest           FunSpec  availability flags, departed flights dropped, passengerId
+│   └── PerformCheckinUseCaseTest          FunSpec  every rule, event failure does not fail the check-in
+├── domain/
+│   ├── event/CheckinCompletedEventTest    FunSpec  e-mail is masked
+│   ├── policy/HoursBeforeDeparturePolicyTest  BehaviorSpec  72h boundaries with a fixed clock
+│   └── strategy/FlightSearchStrategyTest  FunSpec  the three search strategies
+└── infrastructure/
+    ├── repository/InMemoryCheckinRepositoryTest  FunSpec  32 concurrent saves: exactly one wins; deleteAll
+    └── seed/DemoSeedTest                  FunSpec  scenarios match the data; departures never expire
 ```
 
-**Test isolation:** every test class uses `beforeTest { clearMocks(...) }` to reset MockK expectations before each test, preventing expectation bleed between test cases.
+**Test isolation:** unit specs use `beforeTest { clearMocks(...) }` to reset MockK expectations; time-dependent specs inject a fixed `Clock`. The integration tests share one Spring context, so each check-in test uses its own flight/passenger pair.
 
 ```bash
-# Run all tests
-./mvnw test
+# Run everything (generates the OpenAPI interfaces first)
+./mvnw -B verify
 
-# Run a specific spec
+# Run a specific class
 ./mvnw test -Dtest=HoursBeforeDeparturePolicyTest
-
-# Run with verbose output
-./mvnw test -Dsurefire.useFile=false
 ```
 
 ---
 
 ## Running Locally
 
-**Prerequisites:** Java 21+
+**Prerequisites:** JDK 24+ (the build runs on newer JDKs too)
 
 ```bash
 # Generate OpenAPI code + compile + run tests
-./mvnw clean test
+./mvnw clean verify
 
 # Start the application
 ./mvnw spring-boot:run
@@ -495,13 +513,19 @@ curl -X POST http://localhost:8080/checkins \
 curl http://localhost:8080/actuator/health
 ```
 
-**Sample data available in local mode:**
+**Fictitious sample data** (flight times are offsets from the current hour, so they never expire while the API runs):
 
-| Passenger ID | Document | Flights |
-|---|---|---|
-| P-001 | 123.456.789-00 | FL-001 (MF100, GRU→JFK, +24h), FL-002 (MF200, CGH→LHR, +48h) |
-| P-002 | 987.654.321-00 | FL-001 |
-| P-003 | 111.222.333-44 | FL-003 (MF300, GIG→MIA, +100h — outside 72h window) |
+| Flight | Number | Booking | Route | Departs | Passengers | Check-in |
+|---|---|---|---|---|---|---|
+| FL-001 | MF100 | ABC123 | GRU→JFK | +24h | P-001, P-002 | open |
+| FL-002 | MF200 | XYZ789 | CGH→LHR | +48h | P-001 | open |
+| FL-003 | MF300 | DEF456 | GIG→MIA | +100h | P-003 | not open yet |
+| FL-004 | MF214 | MAIA7K | GRU→LIS | +27h40 | P-004, P-005 | open |
+| FL-005 | MF215 | MAIA7K | LIS→GRU | +196h15 | P-004 | not open yet |
+| FL-006 | MF3010 | MAIA7K | GRU→SSA | +20h05 | P-004 | cancelled |
+| FL-007 | MF880 | MAIA2X | GIG→MAD | +50h30 | P-006 | open |
+
+The passengers' documents are listed in the [integration guide](../docs/frontend-integration-guide.md#9-dados-de-teste-fictícios) (for example `P-004` → `123.456.789-09`). Check-ins are kept in memory: use `POST /demo/reset` or restart the API to repeat a check-in.
 
 ---
 
@@ -522,25 +546,28 @@ curl http://localhost:8080/actuator/health
 ```
 src/main/kotlin/com/dowglasmaia/checkinapi/
 ├── api/
-│   ├── controller/    CheckinController
-│   └── exception/     DomainExceptions · GlobalExceptionHandler
+│   ├── controller/    CheckinController · DemoDataController
+│   ├── exception/     DomainExceptions (each with a stable code) · GlobalExceptionHandler
+│   └── filter/        RequestIdFilter (X-Request-Id → MDC)
 ├── application/
 │   ├── port/          FlightRepository · PassengerRepository
 │   │                  CheckinRepository · EventPublisher
 │   └── usecase/
 │       ├── input/     SearchFlightsInput · PerformCheckinInput
+│       ├── output/    SearchFlightsOutput · SearchedFlight
 │       ├── impl/      SearchFlightsUseCaseImpl · PerformCheckinUseCaseImpl
 │       SearchFlightsUseCase · PerformCheckinUseCase  (interfaces)
-├── config/            ApplicationConfig
+├── config/            ApplicationConfig (Clock, beans) · CorsConfig
 ├── domain/
 │   ├── event/         CheckinCompletedEvent
-│   ├── model/         Flight · Passenger · Checkin · FlightStatus · SearchType
+│   ├── model/         Flight · Passenger · Checkin · FlightStatus · SearchType · FlightSearchResult
 │   ├── policy/        CheckinPolicy · HoursBeforeDeparturePolicy
 │   └── strategy/      FlightSearchStrategy · FlightSearchStrategyResolver
 │                      FlightNumberSearchStrategy · BookingCodeSearchStrategy
 │                      DocumentSearchStrategy
 └── infrastructure/
     ├── messaging/     LoggingEventPublisher
-    └── repository/    InMemoryFlightRepository · InMemoryPassengerRepository
-                       InMemoryCheckinRepository
+    ├── repository/    InMemoryFlightRepository · InMemoryPassengerRepository
+    │                  InMemoryCheckinRepository
+    └── seed/          DemoSeed (fictitious flights, passengers and test scenarios)
 ```
