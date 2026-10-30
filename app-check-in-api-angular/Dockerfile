@@ -8,7 +8,7 @@ COPY . .
 RUN npm run build
 
 # Unprivileged nginx serves the SPA and proxies the API (same origin, no CORS).
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 ENV API_UPSTREAM=http://api:8080
 # Value served in /config.json; empty means "same origin".
 ENV API_BASE_URL=""
