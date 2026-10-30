@@ -9,21 +9,23 @@ import { FlowErrorView } from '../ui/flow-error-view';
   selector: 'app-error-page',
   imports: [FlowErrorView],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<app-flow-error-view
-    [error]="error()"
-    [context]="context()"
-    [canResetDemo]="demo.available()"
-    (act)="handle($event)"
-    (resetDemo)="resetDemo()"
-  />`,
+  template: `@if (error(); as current) {
+    <app-flow-error-view
+      [error]="current"
+      [context]="context()"
+      [canResetDemo]="demo.available()"
+      (act)="handle($event)"
+      (resetDemo)="resetDemo()"
+    />
+  }`,
 })
 export class ErrorPage {
   private readonly store = inject(CheckInFlowStore);
   private readonly router = inject(Router);
   protected readonly demo = inject(TestScenarios);
 
-  /** Guaranteed by `errorGuard`. */
-  protected readonly error = computed(() => this.store.error()!);
+  // The store clears the error while a demo reset navigates away, so the view must tolerate its absence.
+  protected readonly error = computed(() => this.store.error());
   protected readonly context = computed<FlowErrorContext>(() => ({
     searchType: this.store.searchType(),
     searchLabel: this.store.searchLabel(),
@@ -58,7 +60,7 @@ export class ErrorPage {
         await this.router.navigate(['/confirmation']);
         break;
       case 'try-again': {
-        const flight = this.error().flight;
+        const flight = this.error()?.flight;
         await this.router.navigate(flight ? ['/flights', flight.id] : ['/search']);
         break;
       }
